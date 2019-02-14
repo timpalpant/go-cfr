@@ -1,0 +1,12 @@
+language: go
+go:
+- 1.11
+install:
+- go get golang.org/x/tools/cmd/cover
+- go get github.com/mattn/goveralls
+- go get github.com/modocache/gover
+- go get -t ./...
+script:
+- go test -v -coverprofile=go-cfr.coverprofile
+- gover
+- goveralls -coverprofile=go-cfr.coverprofile -service=travis-ci
