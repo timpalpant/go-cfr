@@ -8,20 +8,17 @@ const (
 	PlayerNode
 )
 
+// Visitor is a function to observe each of the children of a GameTreeNode.
+// For nodes that are not ChanceNode, the probability is undefined.
+type Visitor func(node GameTreeNode, p float64)
+
 // GameTreeNode is the interface for a node in an extensive-form game tree.
 type GameTreeNode interface {
 	// NodeType returns the type of game node.
 	Type() NodeType
 
-	// NumChildren is the number of direct descendants of this node.
-	NumChildren() int
-	// GetChild returns the i'th child of this node.
-	GetChild(i int) GameTreeNode
-	// GetChildProbability returns the probability of proceeding
-	// to the i'th child of this node.
-	//
-	// GetChildProbability may only be called for nodes with type == Chance.
-	GetChildProbability(i int) float64
+	// Visit each of the direct children of this node once.
+	VisitChildren(Visitor)
 
 	// Player returns this current node's acting player.
 	//
@@ -32,10 +29,6 @@ type GameTreeNode interface {
 	// Utility returns this node's utility for the given player.
 	// It must only be called for nodes with type == Terminal.
 	Utility(player int) float64
-
-	// Reset may be called to free temporary resources associated with this
-	// node when an algorithm is done using it.
-	Reset()
 }
 
 // CFR is the interface implemented by the various CFR algorithms.

@@ -49,7 +49,6 @@ func (v *Vanilla) nextStrategyProfile() {
 }
 
 func (v *Vanilla) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
-	defer node.Reset()
 	if node.Type() == TerminalNode {
 		return node.Utility(node.Player())
 	} else if node.Type() == ChanceNode {
@@ -61,19 +60,31 @@ func (v *Vanilla) runHelper(node GameTreeNode, reachP0, reachP1, reachChance flo
 
 func (v *Vanilla) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
 	expectedValue := 0.0
-	n := node.NumChildren()
-	for i := 0; i < n; i++ {
-		child := node.GetChild(i)
-		p := node.GetChildProbability(i)
+	n := 0
+	node.VisitChildren(func(child GameTreeNode, p float64) {
 		expectedValue += v.runHelper(child, reachP0, reachP1, reachChance*p)
-	}
+		n++
+	})
 
 	return expectedValue / float64(n)
 }
 
 func (v *Vanilla) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
-	policy := v.getPolicy(node)
 	player := node.Player()
+	actionUtils := v.slicePool.alloc(0)
+	defer v.slicePool.free(actionUtils)
+	node.VisitChildren(func(child GameTreeNode, p float64) {
+		var u float64
+		if player == 0 {
+			u = -1 * v.runHelper(child, p*reachP0, reachP1, reachChance)
+		} else {
+			u = -1 * v.runHelper(child, reachP0, p*reachP1, reachChance)
+		}
+
+		actionUtils = append(actionUtils, u)
+	})
+
+	policy := v.getPolicy(node, len(actionUtils))
 	var reachProb float64
 	if player == 0 {
 		reachProb = reachP0 * reachChance
@@ -81,18 +92,6 @@ func (v *Vanilla) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachCha
 		reachProb = reachP1 * reachChance
 	}
 	policy.reachProb += reachProb
-
-	actionUtils := v.slicePool.alloc(node.NumChildren())
-	defer v.slicePool.free(actionUtils)
-	for i := 0; i < node.NumChildren(); i++ {
-		child := node.GetChild(i)
-		p := policy.strategy[i]
-		if player == 0 {
-			actionUtils[i] = -1 * v.runHelper(child, p*reachP0, reachP1, reachChance)
-		} else {
-			actionUtils[i] = -1 * v.runHelper(child, reachP0, p*reachP1, reachChance)
-		}
-	}
 
 	util := floats.Dot(actionUtils, policy.strategy)
 	// The probability of reaching this node, assuming that the current player
@@ -114,18 +113,18 @@ func counterFactualProb(player int, reachP0, reachP1, reachChance float64) float
 	}
 }
 
-func (v *Vanilla) getPolicy(node GameTreeNode) *policy {
+func (v *Vanilla) getPolicy(node GameTreeNode, nActions int) *policy {
 	p := node.Player()
 	is := node.InfoSet(p)
 	if policy, ok := v.strategyProfile[p][is]; ok {
-		if node.NumChildren() != policy.numActions() {
+		if policy.numActions() != nActions {
 			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v - %v",
-				policy.numActions(), node.NumChildren(), node, is))
+				policy.numActions(), nActions, node, is))
 		}
 		return policy
 	}
 
-	policy := newPolicy(node.NumChildren())
+	policy := newPolicy(nActions)
 	v.strategyProfile[p][is] = policy
 	if len(v.strategyProfile[p])%100000 == 0 {
 		glog.Infof("Player %d - %d infosets", p, len(v.strategyProfile[p]))
