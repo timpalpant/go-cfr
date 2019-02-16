@@ -1,8 +1,11 @@
-package cfr
+// Package kuhn implements an extensive-form game tree for Kuhn Poker,
+// adapted from: https://justinsermeno.com/posts/cfr/.
+package kuhn
 
 import (
 	"fmt"
-	"testing"
+
+	"github.com/timpalpant/go-cfr"
 )
 
 const (
@@ -11,7 +14,7 @@ const (
 	player1 = 1
 )
 
-type KuhnAction byte
+type Action byte
 
 const (
 	Random = 'r'
@@ -19,10 +22,10 @@ const (
 	Bet    = 'b'
 )
 
-type KuhnCard int
+type Card int
 
 const (
-	Jack KuhnCard = iota
+	Jack Card = iota
 	Queen
 	King
 )
@@ -33,47 +36,52 @@ var cardStr = [...]string{
 	"K",
 }
 
-func (c KuhnCard) String() string {
+func (c Card) String() string {
 	return cardStr[c]
 }
 
-type KuhnPoker struct {
-	root KuhnPokerNode
+// Poker implements cfr.ExtensiveFormGame for Kuhn Poker.
+type Poker struct {
+	root PokerNode
 }
 
-func (k KuhnPoker) NumPlayers() int {
+func NewGame() Poker {
+	rootNode := newRootNode()
+	return Poker{rootNode}
+}
+
+func (k Poker) NumPlayers() int {
 	return 2
 }
 
-func (k KuhnPoker) RootNode() GameTreeNode {
+func (k Poker) RootNode() cfr.GameTreeNode {
 	return k.root
 }
 
-// KuhnPokerNode implements GameTreeNode for Kuhn Poker.
-// Loosely adapted from: https://justinsermeno.com/posts/cfr/.
-type KuhnPokerNode struct {
+// PokerNode implements cfr.GameTreeNode for Kuhn Poker.
+type PokerNode struct {
 	player        int
-	children      []KuhnPokerNode
+	children      []PokerNode
 	probabilities []float64
 	history       string
 
 	// Private card held by either player.
-	p0Card, p1Card KuhnCard
+	p0Card, p1Card Card
 }
 
-func NewKuhnPokerTree() KuhnPokerNode {
+func newRootNode() PokerNode {
 	deals := buildP0Deals()
-	return KuhnPokerNode{
+	return PokerNode{
 		player:        chance,
 		children:      deals,
 		probabilities: uniformDist(len(deals)),
 	}
 }
 
-func buildP0Deals() []KuhnPokerNode {
-	var result []KuhnPokerNode
-	for _, card := range []KuhnCard{Jack, Queen, King} {
-		child := KuhnPokerNode{
+func buildP0Deals() []PokerNode {
+	var result []PokerNode
+	for _, card := range []Card{Jack, Queen, King} {
+		child := PokerNode{
 			player:  chance,
 			history: string(Random),
 			p0Card:  card,
@@ -87,9 +95,9 @@ func buildP0Deals() []KuhnPokerNode {
 	return result
 }
 
-func buildP1Deals(parent KuhnPokerNode) []KuhnPokerNode {
-	var result []KuhnPokerNode
-	for _, card := range []KuhnCard{Jack, Queen, King} {
+func buildP1Deals(parent PokerNode) []PokerNode {
+	var result []PokerNode
+	for _, card := range []Card{Jack, Queen, King} {
 		if card == parent.p0Card {
 			continue // Both players can't be dealt the same card.
 		}
@@ -106,8 +114,8 @@ func buildP1Deals(parent KuhnPokerNode) []KuhnPokerNode {
 
 }
 
-func buildRound1Children(parent KuhnPokerNode) []KuhnPokerNode {
-	var result []KuhnPokerNode
+func buildRound1Children(parent PokerNode) []PokerNode {
+	var result []PokerNode
 	for _, choice := range []byte{Check, Bet} {
 		child := parent
 		child.player = player1
@@ -118,8 +126,8 @@ func buildRound1Children(parent KuhnPokerNode) []KuhnPokerNode {
 	return result
 }
 
-func buildRound2Children(parent KuhnPokerNode) []KuhnPokerNode {
-	var result []KuhnPokerNode
+func buildRound2Children(parent PokerNode) []PokerNode {
+	var result []PokerNode
 	for _, choice := range []byte{Check, Bet} {
 		child := parent
 		child.player = player0
@@ -130,8 +138,8 @@ func buildRound2Children(parent KuhnPokerNode) []KuhnPokerNode {
 	return result
 }
 
-func buildFinalChildren(parent KuhnPokerNode) []KuhnPokerNode {
-	var result []KuhnPokerNode
+func buildFinalChildren(parent PokerNode) []PokerNode {
+	var result []PokerNode
 	if parent.history[2] == Check && parent.history[3] == Bet {
 		for _, choice := range []byte{Check, Bet} {
 			child := parent
@@ -144,40 +152,39 @@ func buildFinalChildren(parent KuhnPokerNode) []KuhnPokerNode {
 	return result
 }
 
-func (k KuhnPokerNode) String() string {
+// String implements fmt.Stringer.
+func (k PokerNode) String() string {
 	return fmt.Sprintf("Player %v's turn. History: %s [Cards: P0 - %s, P1 - %s]",
 		k.player, k.history, k.p0Card, k.p1Card)
 }
 
-func (k KuhnPokerNode) NumChildren() int {
+// NumChildren implements cfr.GameTreeNode.
+func (k PokerNode) NumChildren() int {
 	return len(k.children)
 }
 
-func (k KuhnPokerNode) GetChild(i int) GameTreeNode {
+// GetChild implements cfr.GameTreeNode.
+func (k PokerNode) GetChild(i int) cfr.GameTreeNode {
 	return k.children[i]
 }
 
-func (k KuhnPokerNode) IsChance() bool {
+// IsChance implements cfr.GameTreeNode.
+func (k PokerNode) IsChance() bool {
 	return k.player == chance
 }
 
-func (k KuhnPokerNode) GetChildProbability(i int) float64 {
+// GetChildProbability implements cfr.GameTreeNode.
+func (k PokerNode) GetChildProbability(i int) float64 {
 	return k.probabilities[i]
 }
 
-func (k KuhnPokerNode) Player() int {
+// Player implements cfr.GameTreeNode.
+func (k PokerNode) Player() int {
 	return k.player
 }
 
-func (k KuhnPokerNode) playerCard(player int) KuhnCard {
-	if player == player0 {
-		return k.p0Card
-	}
-
-	return k.p1Card
-}
-
-func (k KuhnPokerNode) Utility(player int) float64 {
+// Utility implements cfr.GameTreeNode.
+func (k PokerNode) Utility(player int) float64 {
 	cardPlayer := k.playerCard(player)
 	cardOpponent := k.playerCard(1 - player)
 
@@ -212,46 +219,23 @@ func (k KuhnPokerNode) Utility(player int) float64 {
 	return -2.0
 }
 
-func (k KuhnPokerNode) InfoSet(player int) string {
+// InfoSet implements cfr.GameTreeNode.
+func (k PokerNode) InfoSet(player int) string {
+	return k.playerCard(player).String() + "-" + k.history
+}
+
+func (k PokerNode) playerCard(player int) Card {
 	if player == player0 {
-		return k.p0Card.String() + k.history
-	} else {
-		return k.p1Card.String() + k.history
+		return k.p0Card
 	}
+
+	return k.p1Card
 }
 
-func TestKuhnPoker_GameTree(t *testing.T) {
-	kuhn := NewKuhnPokerTree()
-
-	nNodes := CountNodes(kuhn)
-	if nNodes != 58 {
-		t.Errorf("expected %d nodes, got %d", 58, nNodes)
+func uniformDist(n int) []float64 {
+	result := make([]float64, n)
+	for i := range result {
+		result[i] = 1.0 / float64(n)
 	}
-
-	nTerminal := CountTerminalNodes(kuhn)
-	if nTerminal != 30 {
-		t.Errorf("expected %d terminal nodes, got %d", 30, nTerminal)
-	}
-}
-
-func TestKuhnPoker_InfoSets(t *testing.T) {
-	kuhn := NewKuhnPokerTree()
-	nInfoSets := CountInfoSets(kuhn)
-	if nInfoSets != 12 {
-		t.Errorf("expected %d nodes, got %d", 12, nInfoSets)
-	}
-}
-
-func TestKuhnPoker_VanillaCFR(t *testing.T) {
-	root := NewKuhnPokerTree()
-	kuhn := KuhnPoker{root}
-	cfr := NewVanilla(kuhn)
-	expectedValue := 0.0
-	nIter := 10000
-	for i := 1; i <= nIter; i++ {
-		expectedValue += cfr.Run(root)
-		if i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float64(i))
-		}
-	}
+	return result
 }

@@ -39,3 +39,8 @@ type CFR interface {
 	// and return the expected value.
 	Run(node GameTreeNode) (expectedValue float64)
 }
+
+// IsTerminal returns true if this node is an end-game node.
+func IsTerminal(node GameTreeNode) bool {
+	return node.NumChildren() == 0
+}

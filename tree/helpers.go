@@ -1,12 +1,11 @@
-package cfr
+package tree
 
-// IsTerminal returns true if this node is an end-game node.
-func IsTerminal(node GameTreeNode) bool {
-	return node.NumChildren() == 0
-}
+import (
+	"github.com/timpalpant/go-cfr"
+)
 
-func CountTerminalNodes(root GameTreeNode) int {
-	if IsTerminal(root) {
+func CountTerminalNodes(root cfr.GameTreeNode) int {
+	if cfr.IsTerminal(root) {
 		return 1
 	}
 
@@ -19,7 +18,7 @@ func CountTerminalNodes(root GameTreeNode) int {
 	return total
 }
 
-func CountNodes(root GameTreeNode) int {
+func CountNodes(root cfr.GameTreeNode) int {
 	total := 1
 	for i := 0; i < root.NumChildren(); i++ {
 		child := root.GetChild(i)
@@ -29,14 +28,14 @@ func CountNodes(root GameTreeNode) int {
 	return total
 }
 
-func CountInfoSets(root GameTreeNode) int {
+func CountInfoSets(root cfr.GameTreeNode) int {
 	seen := make(map[string]struct{})
 	walkInfoSets(root, seen)
 	return len(seen)
 }
 
-func walkInfoSets(node GameTreeNode, seen map[string]struct{}) {
-	if !node.IsChance() && !IsTerminal(node) {
+func walkInfoSets(node cfr.GameTreeNode, seen map[string]struct{}) {
+	if !node.IsChance() && !cfr.IsTerminal(node) {
 		seen[node.InfoSet(node.Player())] = struct{}{}
 	}
 
