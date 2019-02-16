@@ -1,6 +1,8 @@
 package cfr
 
 import (
+	"fmt"
+
 	"gonum.org/v1/gonum/floats"
 )
 
@@ -46,6 +48,7 @@ func (v *Vanilla) nextStrategyProfile() {
 }
 
 func (v *Vanilla) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
+	defer node.Reset()
 	if IsTerminal(node) {
 		return node.Utility(node.Player())
 	} else if node.IsChance() {
@@ -114,6 +117,10 @@ func (v *Vanilla) getPolicy(node GameTreeNode) *policy {
 	p := node.Player()
 	is := node.InfoSet(p)
 	if policy, ok := v.strategyProfile[p][is]; ok {
+		if node.NumChildren() != policy.numActions() {
+			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v - %v",
+				policy.numActions(), node.NumChildren(), node, is))
+		}
 		return policy
 	}
 
@@ -136,6 +143,10 @@ func newPolicy(nActions int) *policy {
 		strategy:    uniformDist(nActions),
 		strategySum: make([]float64, nActions),
 	}
+}
+
+func (p *policy) numActions() int {
+	return len(p.strategy)
 }
 
 func (p *policy) nextStrategy() {

@@ -25,6 +25,10 @@ type GameTreeNode interface {
 	// Utility returns this node's utility for the given player.
 	// It must only be called for terminal nodes.
 	Utility(player int) float64
+
+	// Reset may be called to free temporary resources associated with this
+	// node when an algorithm is done using it.
+	Reset()
 }
 
 // CFR is the interface implemented by the various CFR algorithms.

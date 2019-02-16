@@ -10,6 +10,8 @@ func Visit(root cfr.GameTreeNode, visitor func(node cfr.GameTreeNode)) {
 		child := root.GetChild(i)
 		Visit(child, visitor)
 	}
+
+	root.Reset()
 }
 
 func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet string)) {
