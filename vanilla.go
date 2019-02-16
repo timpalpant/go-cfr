@@ -22,6 +22,15 @@ func NewVanilla(game ExtensiveFormGame) *Vanilla {
 	}
 }
 
+func (v *Vanilla) GetStrategy(player int, infoSet string) []float64 {
+	policy := v.strategyProfile[player][infoSet]
+	if policy == nil {
+		return nil
+	}
+
+	return policy.getAverageStrategy()
+}
+
 func (v *Vanilla) Run(node GameTreeNode) float64 {
 	expectedValue := v.runHelper(node, 1.0, 1.0, 1.0)
 	v.nextStrategyProfile()

@@ -40,4 +40,11 @@ func TestPoker_VanillaCFR(t *testing.T) {
 			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float64(i))
 		}
 	}
+
+	tree.VisitInfoSets(game.RootNode(), func(player int, infoSet string) {
+		strat := vanillaCFR.GetStrategy(player, infoSet)
+		if strat != nil {
+			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
+		}
+	})
 }

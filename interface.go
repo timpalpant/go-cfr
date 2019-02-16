@@ -36,8 +36,11 @@ type GameTreeNode interface {
 
 type CFR interface {
 	// Run one iteration of CFR on the tree rooted at the given GameNode
-	// and return the expected value.
+	// and return the expected value for the first player.
 	Run(node GameTreeNode) (expectedValue float64)
+
+	// Get the current strategy for the given player's information set.
+	GetStrategy(player int, infoSet string) []float64
 }
 
 // IsTerminal returns true if this node is an end-game node.
