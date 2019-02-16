@@ -3,6 +3,7 @@ package cfr
 import (
 	"fmt"
 
+	"github.com/golang/glog"
 	"gonum.org/v1/gonum/floats"
 )
 
@@ -49,9 +50,9 @@ func (v *Vanilla) nextStrategyProfile() {
 
 func (v *Vanilla) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
 	defer node.Reset()
-	if IsTerminal(node) {
+	if node.Type() == TerminalNode {
 		return node.Utility(node.Player())
-	} else if node.IsChance() {
+	} else if node.Type() == ChanceNode {
 		return v.handleChanceNode(node, reachP0, reachP1, reachChance)
 	}
 
@@ -126,6 +127,9 @@ func (v *Vanilla) getPolicy(node GameTreeNode) *policy {
 
 	policy := newPolicy(node.NumChildren())
 	v.strategyProfile[p][is] = policy
+	if len(v.strategyProfile[p])%100000 == 0 {
+		glog.Infof("Player %d - %d infosets", p, len(v.strategyProfile[p]))
+	}
 	return policy
 }
 
