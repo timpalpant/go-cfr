@@ -1,9 +1,9 @@
 package cfr
 
-type InfoSet = [20]byte
-
-type Game interface {
+type ExtensiveFormGame interface {
+	// The number of non-chance players in the game.
 	NumPlayers() int
+	// The root node at the start of the game.
 	RootNode() GameTreeNode
 }
 
@@ -24,16 +24,18 @@ type GameTreeNode interface {
 	GetChildProbability(i int) float64
 
 	// Player returns this current node's acting player.
+	//
+	// It may only be called for nodes with IsChance() == false.
 	Player() int
-	// InfoSet returns the information set for the acting player.
-	InfoSet() InfoSet
+	// InfoSet returns the information set for the given player.
+	InfoSet(player int) string
 	// Utility returns this node's utility for the given player.
 	// It must only be called for terminal nodes.
-	Utility() float64
+	Utility(player int) float64
 }
 
 type CFR interface {
-	// Run one iteration of CFR on the subtree rooted at the given GameNode
+	// Run one iteration of CFR on the tree rooted at the given GameNode
 	// and return the expected value.
 	Run(node GameTreeNode) (expectedValue float64)
 }

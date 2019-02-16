@@ -1,6 +1,7 @@
 package cfr
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -8,15 +9,33 @@ const (
 	chance  = -1
 	player0 = 0
 	player1 = 1
-
-	random = 'r'
-	check  = 'c'
-	bet    = 'b'
-
-	jack = iota
-	queen
-	king
 )
+
+type KuhnAction byte
+
+const (
+	Random = 'r'
+	Check  = 'c'
+	Bet    = 'b'
+)
+
+type KuhnCard int
+
+const (
+	Jack KuhnCard = iota
+	Queen
+	King
+)
+
+var cardStr = [...]string{
+	"J",
+	"Q",
+	"K",
+}
+
+func (c KuhnCard) String() string {
+	return cardStr[c]
+}
 
 type KuhnPoker struct {
 	root KuhnPokerNode
@@ -36,10 +55,10 @@ type KuhnPokerNode struct {
 	player        int
 	children      []KuhnPokerNode
 	probabilities []float64
-	history       []byte
+	history       string
 
 	// Private card held by either player.
-	p0Card, p1Card byte
+	p0Card, p1Card KuhnCard
 }
 
 func NewKuhnPokerTree() KuhnPokerNode {
@@ -53,10 +72,10 @@ func NewKuhnPokerTree() KuhnPokerNode {
 
 func buildP0Deals() []KuhnPokerNode {
 	var result []KuhnPokerNode
-	for _, card := range []byte{jack, queen, king} {
+	for _, card := range []KuhnCard{Jack, Queen, King} {
 		child := KuhnPokerNode{
 			player:  chance,
-			history: []byte{random},
+			history: string(Random),
 			p0Card:  card,
 		}
 
@@ -70,16 +89,15 @@ func buildP0Deals() []KuhnPokerNode {
 
 func buildP1Deals(parent KuhnPokerNode) []KuhnPokerNode {
 	var result []KuhnPokerNode
-	for _, card := range []byte{jack, queen, king} {
+	for _, card := range []KuhnCard{Jack, Queen, King} {
 		if card == parent.p0Card {
-			continue
+			continue // Both players can't be dealt the same card.
 		}
 
 		child := parent
 		child.player = player0
 		child.p1Card = card
-		child.history = append([]byte(nil), parent.history...)
-		child.history = append(child.history, random)
+		child.history += string([]byte{Random})
 		child.children = buildRound1Children(child)
 		result = append(result, child)
 	}
@@ -90,11 +108,10 @@ func buildP1Deals(parent KuhnPokerNode) []KuhnPokerNode {
 
 func buildRound1Children(parent KuhnPokerNode) []KuhnPokerNode {
 	var result []KuhnPokerNode
-	for _, choice := range []byte{check, bet} {
+	for _, choice := range []byte{Check, Bet} {
 		child := parent
 		child.player = player1
-		child.history = append([]byte(nil), parent.history...)
-		child.history = append(child.history, choice)
+		child.history += string([]byte{choice})
 		child.children = buildRound2Children(child)
 		result = append(result, child)
 	}
@@ -103,11 +120,10 @@ func buildRound1Children(parent KuhnPokerNode) []KuhnPokerNode {
 
 func buildRound2Children(parent KuhnPokerNode) []KuhnPokerNode {
 	var result []KuhnPokerNode
-	for _, choice := range []byte{check, bet} {
+	for _, choice := range []byte{Check, Bet} {
 		child := parent
 		child.player = player0
-		child.history = append([]byte(nil), parent.history...)
-		child.history = append(child.history, choice)
+		child.history += string([]byte{choice})
 		child.children = buildFinalChildren(child)
 		result = append(result, child)
 	}
@@ -116,16 +132,21 @@ func buildRound2Children(parent KuhnPokerNode) []KuhnPokerNode {
 
 func buildFinalChildren(parent KuhnPokerNode) []KuhnPokerNode {
 	var result []KuhnPokerNode
-	if parent.history[2] == check && parent.history[3] == bet {
-		for _, choice := range []byte{check, bet} {
+	if parent.history[2] == Check && parent.history[3] == Bet {
+		for _, choice := range []byte{Check, Bet} {
 			child := parent
-			child.history = append([]byte(nil), parent.history...)
-			child.history = append(child.history, choice)
+			child.player = player1
+			child.history += string([]byte{choice})
 			result = append(result, child)
 		}
 	}
 
 	return result
+}
+
+func (k KuhnPokerNode) String() string {
+	return fmt.Sprintf("Player %v's turn. History: %s [Cards: P0 - %s, P1 - %s]",
+		k.player, k.history, k.p0Card, k.p1Card)
 }
 
 func (k KuhnPokerNode) NumChildren() int {
@@ -148,32 +169,40 @@ func (k KuhnPokerNode) Player() int {
 	return k.player
 }
 
-func (k KuhnPokerNode) Utility() float64 {
-	var cardPlayer, cardOpponent byte
-	if k.player == player1 {
-		cardPlayer = k.p0Card
-		cardOpponent = k.p1Card
-	} else {
-		cardPlayer = k.p1Card
-		cardOpponent = k.p0Card
+func (k KuhnPokerNode) playerCard(player int) KuhnCard {
+	if player == player0 {
+		return k.p0Card
 	}
 
-	h := string(k.history)
-	if h == "rrcbc" || h == "rrbc" {
+	return k.p1Card
+}
+
+func (k KuhnPokerNode) Utility(player int) float64 {
+	cardPlayer := k.playerCard(player)
+	cardOpponent := k.playerCard(1 - player)
+
+	// By convention, terminal nodes are labeled with the player whose
+	// turn it would be (i.e. not the last acting player).
+
+	if k.history == "rrcbc" || k.history == "rrbc" {
 		// Last player folded. The current player wins.
-		return 1.0
-	} else if h == "rrcc" {
+		if k.player == player {
+			return 1.0
+		} else {
+			return -1.0
+		}
+	} else if k.history == "rrcc" {
 		// Showdown with no bets.
 		if cardPlayer > cardOpponent {
 			return 1.0
+		} else {
+			return -1.0
 		}
-
-		return -1.0
 	}
 
 	// Showdown with 1 bet.
-	if h != "rrcbb" && h != "rrbb" {
-		panic("unexpected history: " + h)
+	if k.history != "rrcbb" && k.history != "rrbb" {
+		panic("unexpected history: " + k.history)
 	}
 
 	if cardPlayer > cardOpponent {
@@ -183,16 +212,12 @@ func (k KuhnPokerNode) Utility() float64 {
 	return -2.0
 }
 
-func (k KuhnPokerNode) InfoSet() [20]byte {
-	var result [20]byte
-	if k.player == player0 {
-		result[0] = k.p0Card
-	} else if k.player == player1 {
-		result[0] = k.p1Card
+func (k KuhnPokerNode) InfoSet(player int) string {
+	if player == player0 {
+		return k.p0Card.String() + k.history
+	} else {
+		return k.p1Card.String() + k.history
 	}
-
-	copy(result[1:], k.history)
-	return result
 }
 
 func TestKuhnPoker_GameTree(t *testing.T) {
@@ -224,9 +249,9 @@ func TestKuhnPoker_VanillaCFR(t *testing.T) {
 	expectedValue := 0.0
 	nIter := 10000
 	for i := 1; i <= nIter; i++ {
-		expectedValue += cfr.Run(root) / float64(nIter)
+		expectedValue += cfr.Run(root)
 		if i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue)
+			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float64(i))
 		}
 	}
 }

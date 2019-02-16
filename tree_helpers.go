@@ -30,14 +30,14 @@ func CountNodes(root GameTreeNode) int {
 }
 
 func CountInfoSets(root GameTreeNode) int {
-	seen := make(map[InfoSet]struct{})
+	seen := make(map[string]struct{})
 	walkInfoSets(root, seen)
 	return len(seen)
 }
 
-func walkInfoSets(node GameTreeNode, seen map[InfoSet]struct{}) {
+func walkInfoSets(node GameTreeNode, seen map[string]struct{}) {
 	if !node.IsChance() && !IsTerminal(node) {
-		seen[node.InfoSet()] = struct{}{}
+		seen[node.InfoSet(node.Player())] = struct{}{}
 	}
 
 	for i := 0; i < node.NumChildren(); i++ {
