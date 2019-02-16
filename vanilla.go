@@ -10,15 +10,15 @@ type Vanilla struct {
 	slicePool       *floatSlicePool
 }
 
-func NewVanilla(game ExtensiveFormGame) *Vanilla {
-	strategyProfile := make(map[int]map[string]*policy, game.NumPlayers())
-	for i := 0; i < game.NumPlayers(); i++ {
-		strategyProfile[i] = make(map[string]*policy)
-	}
+var _ CFR = &Vanilla{}
 
+func NewVanilla() *Vanilla {
 	return &Vanilla{
-		strategyProfile,
-		&floatSlicePool{},
+		strategyProfile: map[int]map[string]*policy{
+			0: make(map[string]*policy),
+			1: make(map[string]*policy),
+		},
+		slicePool: &floatSlicePool{},
 	}
 }
 

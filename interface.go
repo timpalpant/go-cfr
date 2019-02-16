@@ -1,12 +1,5 @@
 package cfr
 
-type ExtensiveFormGame interface {
-	// The number of non-chance players in the game.
-	NumPlayers() int
-	// The root node at the start of the game.
-	RootNode() GameTreeNode
-}
-
 // GameTreeNode is the interface for a node in an extensive-form game tree.
 type GameTreeNode interface {
 	// NumChildren is the number of direct descendants of this node.
@@ -34,6 +27,7 @@ type GameTreeNode interface {
 	Utility(player int) float64
 }
 
+// CFR is the interface implemented by the various CFR algorithms.
 type CFR interface {
 	// Run one iteration of CFR on the tree rooted at the given GameNode
 	// and return the expected value for the first player.

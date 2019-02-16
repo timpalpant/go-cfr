@@ -8,7 +8,7 @@ import (
 )
 
 func TestPoker_GameTree(t *testing.T) {
-	root := newRootNode()
+	root := NewGame()
 
 	nNodes := tree.CountNodes(root)
 	if nNodes != 58 {
@@ -22,7 +22,7 @@ func TestPoker_GameTree(t *testing.T) {
 }
 
 func TestPoker_InfoSets(t *testing.T) {
-	root := newRootNode()
+	root := NewGame()
 	nInfoSets := tree.CountInfoSets(root)
 	if nInfoSets != 12 {
 		t.Errorf("expected %d nodes, got %d", 12, nInfoSets)
@@ -30,18 +30,18 @@ func TestPoker_InfoSets(t *testing.T) {
 }
 
 func TestPoker_VanillaCFR(t *testing.T) {
-	game := NewGame()
-	vanillaCFR := cfr.NewVanilla(game)
+	root := NewGame()
+	vanillaCFR := cfr.NewVanilla()
 	expectedValue := 0.0
 	nIter := 10000
 	for i := 1; i <= nIter; i++ {
-		expectedValue += vanillaCFR.Run(game.RootNode())
+		expectedValue += vanillaCFR.Run(root)
 		if i%(nIter/10) == 0 {
 			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float64(i))
 		}
 	}
 
-	tree.VisitInfoSets(game.RootNode(), func(player int, infoSet string) {
+	tree.VisitInfoSets(root, func(player int, infoSet string) {
 		strat := vanillaCFR.GetStrategy(player, infoSet)
 		if strat != nil {
 			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])

@@ -45,19 +45,6 @@ type Poker struct {
 	root PokerNode
 }
 
-func NewGame() Poker {
-	rootNode := newRootNode()
-	return Poker{rootNode}
-}
-
-func (k Poker) NumPlayers() int {
-	return 2
-}
-
-func (k Poker) RootNode() cfr.GameTreeNode {
-	return k.root
-}
-
 // PokerNode implements cfr.GameTreeNode for Kuhn Poker.
 type PokerNode struct {
 	player        int
@@ -69,7 +56,7 @@ type PokerNode struct {
 	p0Card, p1Card Card
 }
 
-func newRootNode() PokerNode {
+func NewGame() PokerNode {
 	deals := buildP0Deals()
 	return PokerNode{
 		player:        chance,

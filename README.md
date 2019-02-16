@@ -13,29 +13,41 @@ in an imperfect information [extensive-form game](https://en.wikipedia.org/wiki/
 ## Usage
 
 To use CFR, you must implement the extensive-form game tree for your game,
-by implementing the `ExtensiveFormGame` interface.
+by implementing the `GameTreeNode` interface.
 
 An implementation of [Kuhn Poker](https://en.wikipedia.org/wiki/Kuhn_poker) is included
 as an example.
 
-```
+```Go
 package main
 
 import (
-    "github.com/timpalpant/go-cfr"
-    "github.com/timpalpant/go-cfr/kuhn"
+	"fmt"
+
+	"github.com/timpalpant/go-cfr"
+	"github.com/timpalpant/go-cfr/kuhn"
+	"github.com/timpalpant/go-cfr/tree"
 )
 
 func main() {
-    poker := kuhn.NewGame()
-    cfr := cfr.NewVanilla(poker)
-    nIter := 10000
-    for i := 1; i <= nIter; i++ {
-        expectedValue += cfr.Run(poker.RootNode())
-    }
+	poker := kuhn.NewGame()
+	vanillaCFR := cfr.NewVanilla()
+	nIter := 10000
+	expectedValue := 0.0
+	for i := 1; i <= nIter; i++ {
+		expectedValue += vanillaCFR.Run(poker)
+	}
 
-    expectedValue /= nIter
-    fmt.Printf("Expected value is: %v\n", expectedValue)
+	expectedValue /= float64(nIter)
+	fmt.Printf("Expected value is: %v\n", expectedValue)
+
+	tree.VisitInfoSets(poker, func(player int, infoSet string) {
+		strat := vanillaCFR.GetStrategy(player, infoSet)
+		if strat != nil {
+			fmt.Printf("[player %d] %6s: check=%.2f bet=%.2f\n",
+				player, infoSet, strat[0], strat[1])
+		}
+	})
 }
 ```
 
