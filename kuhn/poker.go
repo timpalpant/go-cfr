@@ -40,11 +40,6 @@ func (c Card) String() string {
 	return cardStr[c]
 }
 
-// Poker implements cfr.ExtensiveFormGame for Kuhn Poker.
-type Poker struct {
-	root PokerNode
-}
-
 // PokerNode implements cfr.GameTreeNode for Kuhn Poker.
 type PokerNode struct {
 	player        int
@@ -56,87 +51,8 @@ type PokerNode struct {
 	p0Card, p1Card Card
 }
 
-func NewGame() PokerNode {
-	deals := buildP0Deals()
-	return PokerNode{
-		player:        chance,
-		children:      deals,
-		probabilities: uniformDist(len(deals)),
-	}
-}
-
-func buildP0Deals() []PokerNode {
-	var result []PokerNode
-	for _, card := range []Card{Jack, Queen, King} {
-		child := PokerNode{
-			player:  chance,
-			history: string(Random),
-			p0Card:  card,
-		}
-
-		child.children = buildP1Deals(child)
-		child.probabilities = uniformDist(len(child.children))
-		result = append(result, child)
-	}
-
-	return result
-}
-
-func buildP1Deals(parent PokerNode) []PokerNode {
-	var result []PokerNode
-	for _, card := range []Card{Jack, Queen, King} {
-		if card == parent.p0Card {
-			continue // Both players can't be dealt the same card.
-		}
-
-		child := parent
-		child.player = player0
-		child.p1Card = card
-		child.history += string([]byte{Random})
-		child.children = buildRound1Children(child)
-		result = append(result, child)
-	}
-
-	return result
-
-}
-
-func buildRound1Children(parent PokerNode) []PokerNode {
-	var result []PokerNode
-	for _, choice := range []byte{Check, Bet} {
-		child := parent
-		child.player = player1
-		child.history += string([]byte{choice})
-		child.children = buildRound2Children(child)
-		result = append(result, child)
-	}
-	return result
-}
-
-func buildRound2Children(parent PokerNode) []PokerNode {
-	var result []PokerNode
-	for _, choice := range []byte{Check, Bet} {
-		child := parent
-		child.player = player0
-		child.history += string([]byte{choice})
-		child.children = buildFinalChildren(child)
-		result = append(result, child)
-	}
-	return result
-}
-
-func buildFinalChildren(parent PokerNode) []PokerNode {
-	var result []PokerNode
-	if parent.history[2] == Check && parent.history[3] == Bet {
-		for _, choice := range []byte{Check, Bet} {
-			child := parent
-			child.player = player1
-			child.history += string([]byte{choice})
-			result = append(result, child)
-		}
-	}
-
-	return result
+func NewGame() *PokerNode {
+	return &PokerNode{player: chance}
 }
 
 // String implements fmt.Stringer.
@@ -145,21 +61,48 @@ func (k PokerNode) String() string {
 		k.player, k.history, k.p0Card, k.p1Card)
 }
 
-// VisitChildren implements cfr.GameTreeNode.
-func (k PokerNode) VisitChildren(visitor cfr.Visitor) {
-	var p float64
-	for i, child := range k.children {
-		if len(k.probabilities) > 0 {
-			p = k.probabilities[i]
-		}
-
-		visitor(child, p)
+// BuildChildren implements cfr.GameTreeNode.
+func (k *PokerNode) BuildChildren() {
+	switch len(k.history) {
+	case 0:
+		k.children = buildP0Deals()
+		k.probabilities = uniformDist(len(k.children))
+	case 1:
+		k.children = buildP1Deals(k)
+		k.probabilities = uniformDist(len(k.children))
+	case 2:
+		k.children = buildRound1Children(k)
+	case 3:
+		k.children = buildRound2Children(k)
+	case 4:
+		k.children = buildFinalChildren(k)
 	}
 }
 
+// FreeChildren implements cfr.GameTreeNode.
+func (k *PokerNode) FreeChildren() {
+	k.children = nil
+	k.probabilities = nil
+}
+
+// NumChildren implements cfr.GameTreeNode.
+func (k PokerNode) NumChildren() int {
+	return len(k.children)
+}
+
+// GetChild implements cfr.GameTreeNode.
+func (k *PokerNode) GetChild(i int) cfr.GameTreeNode {
+	return &k.children[i]
+}
+
+// GetChildProbability implements cfr.GameTreeNode.
+func (k *PokerNode) GetChildProbability(i int) float64 {
+	return k.probabilities[i]
+}
+
 // Type implements cfr.GameTreeNode.
-func (k PokerNode) Type() cfr.NodeType {
-	if len(k.children) == 0 {
+func (k *PokerNode) Type() cfr.NodeType {
+	if k.IsTerminal() {
 		return cfr.TerminalNode
 	} else if k.player == chance {
 		return cfr.ChanceNode
@@ -168,13 +111,18 @@ func (k PokerNode) Type() cfr.NodeType {
 	return cfr.PlayerNode
 }
 
+func (k *PokerNode) IsTerminal() bool {
+	return (k.history == "rrcc" || k.history == "rrcbc" ||
+		k.history == "rrcbb" || k.history == "rrbc" || k.history == "rrbb")
+}
+
 // Player implements cfr.GameTreeNode.
-func (k PokerNode) Player() int {
+func (k *PokerNode) Player() int {
 	return k.player
 }
 
 // Utility implements cfr.GameTreeNode.
-func (k PokerNode) Utility(player int) float64 {
+func (k *PokerNode) Utility(player int) float64 {
 	cardPlayer := k.playerCard(player)
 	cardOpponent := k.playerCard(1 - player)
 
@@ -210,11 +158,11 @@ func (k PokerNode) Utility(player int) float64 {
 }
 
 // InfoSet implements cfr.GameTreeNode.
-func (k PokerNode) InfoSet(player int) string {
+func (k *PokerNode) InfoSet(player int) string {
 	return k.playerCard(player).String() + "-" + k.history
 }
 
-func (k PokerNode) playerCard(player int) Card {
+func (k *PokerNode) playerCard(player int) Card {
 	if player == player0 {
 		return k.p0Card
 	}
@@ -227,5 +175,74 @@ func uniformDist(n int) []float64 {
 	for i := range result {
 		result[i] = 1.0 / float64(n)
 	}
+	return result
+}
+
+func buildP0Deals() []PokerNode {
+	var result []PokerNode
+	for _, card := range []Card{Jack, Queen, King} {
+		child := PokerNode{
+			player:  chance,
+			history: string(Random),
+			p0Card:  card,
+		}
+
+		result = append(result, child)
+	}
+
+	return result
+}
+
+func buildP1Deals(parent *PokerNode) []PokerNode {
+	var result []PokerNode
+	for _, card := range []Card{Jack, Queen, King} {
+		if card == parent.p0Card {
+			continue // Both players can't be dealt the same card.
+		}
+
+		child := *parent
+		child.player = player0
+		child.p1Card = card
+		child.history += string([]byte{Random})
+		result = append(result, child)
+	}
+
+	return result
+
+}
+
+func buildRound1Children(parent *PokerNode) []PokerNode {
+	var result []PokerNode
+	for _, choice := range []byte{Check, Bet} {
+		child := *parent
+		child.player = player1
+		child.history += string([]byte{choice})
+		result = append(result, child)
+	}
+	return result
+}
+
+func buildRound2Children(parent *PokerNode) []PokerNode {
+	var result []PokerNode
+	for _, choice := range []byte{Check, Bet} {
+		child := *parent
+		child.player = player0
+		child.history += string([]byte{choice})
+		result = append(result, child)
+	}
+	return result
+}
+
+func buildFinalChildren(parent *PokerNode) []PokerNode {
+	var result []PokerNode
+	if parent.history[2] == Check && parent.history[3] == Bet {
+		for _, choice := range []byte{Check, Bet} {
+			child := *parent
+			child.player = player1
+			child.history += string([]byte{choice})
+			result = append(result, child)
+		}
+	}
+
 	return result
 }

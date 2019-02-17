@@ -4,9 +4,19 @@ import (
 	"github.com/timpalpant/go-cfr"
 )
 
+func Visit(root cfr.GameTreeNode, visitor func(node cfr.GameTreeNode)) {
+	visitor(root)
+
+	root.BuildChildren()
+	defer root.FreeChildren()
+	for i := 0; i < root.NumChildren(); i++ {
+		Visit(root.GetChild(i), visitor)
+	}
+}
+
 func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet string)) {
 	seen := make(map[string]struct{})
-	root.VisitChildren(func(node cfr.GameTreeNode, p float64) {
+	Visit(root, func(node cfr.GameTreeNode) {
 		if node.Type() == cfr.PlayerNode {
 			player := node.Player()
 			infoSet := node.InfoSet(player)
@@ -22,7 +32,7 @@ func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet strin
 
 func CountTerminalNodes(root cfr.GameTreeNode) int {
 	total := 0
-	root.VisitChildren(func(node cfr.GameTreeNode, p float64) {
+	Visit(root, func(node cfr.GameTreeNode) {
 		if node.Type() == cfr.TerminalNode {
 			total++
 		}
@@ -33,7 +43,7 @@ func CountTerminalNodes(root cfr.GameTreeNode) int {
 
 func CountNodes(root cfr.GameTreeNode) int {
 	total := 0
-	root.VisitChildren(func(node cfr.GameTreeNode, p float64) { total++ })
+	Visit(root, func(node cfr.GameTreeNode) { total++ })
 	return total
 }
 

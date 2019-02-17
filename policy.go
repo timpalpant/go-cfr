@@ -1,8 +1,6 @@
 package cfr
 
 import (
-	"sync"
-
 	"gonum.org/v1/gonum/floats"
 )
 
@@ -25,7 +23,6 @@ func counterFactualProb(player int, reachP0, reachP1, reachChance float64) float
 }
 
 type policy struct {
-	mu          sync.Mutex
 	reachProb   float64
 	regretSum   []float64
 	strategy    []float64
@@ -46,8 +43,6 @@ func (p *policy) numActions() int {
 }
 
 func (p *policy) nextStrategy() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	floats.AddScaled(p.strategySum, p.reachProb, p.strategy)
 	p.strategy = p.calcStrategyUnsafe()
 	p.reachProb = 0.0
@@ -67,8 +62,6 @@ func (p *policy) calcStrategyUnsafe() []float64 {
 }
 
 func (p *policy) getAverageStrategy() []float64 {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	total := floats.Sum(p.strategySum)
 	if total > 0 {
 		avgStrat := make([]float64, len(p.strategySum))
@@ -84,8 +77,6 @@ func (p *policy) getAverageStrategy() []float64 {
 }
 
 func (p *policy) update(actionUtils []float64, reachProb, counterFactualProb float64) float64 {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	p.reachProb += reachProb
 	util := floats.Dot(actionUtils, p.strategy)
 	for i := range actionUtils {
