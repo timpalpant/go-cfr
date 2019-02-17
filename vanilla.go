@@ -1,16 +1,18 @@
 package cfr
 
 import (
+	"encoding/base64"
 	"fmt"
+	"sync"
 
 	"github.com/golang/glog"
-	"gonum.org/v1/gonum/floats"
 )
 
 type Vanilla struct {
+	mu sync.Mutex
 	// Map of player -> InfoSet -> Strategy for that InfoSet.
 	strategyProfile map[int]map[string]*policy
-	slicePool       *floatSlicePool
+	slicePool       sync.Pool
 }
 
 var _ CFR = &Vanilla{}
@@ -21,11 +23,17 @@ func NewVanilla() *Vanilla {
 			0: make(map[string]*policy),
 			1: make(map[string]*policy),
 		},
-		slicePool: &floatSlicePool{},
+		slicePool: sync.Pool{
+			New: func() interface{} {
+				return []float64(nil)
+			},
+		},
 	}
 }
 
 func (v *Vanilla) GetStrategy(player int, infoSet string) []float64 {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	policy := v.strategyProfile[player][infoSet]
 	if policy == nil {
 		return nil
@@ -34,13 +42,20 @@ func (v *Vanilla) GetStrategy(player int, infoSet string) []float64 {
 	return policy.getAverageStrategy()
 }
 
+type work struct {
+	node GameTreeNode
+	p    float64
+}
+
 func (v *Vanilla) Run(node GameTreeNode) float64 {
-	expectedValue := v.runHelper(node, 1.0, 1.0, 1.0)
+	expectedValue := v.runHelper(node, 1.0, 1.0, 1.0, 1)
 	v.nextStrategyProfile()
 	return expectedValue
 }
 
 func (v *Vanilla) nextStrategyProfile() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	for _, policies := range v.strategyProfile {
 		for _, p := range policies {
 			p.nextStrategy()
@@ -48,78 +63,64 @@ func (v *Vanilla) nextStrategyProfile() {
 	}
 }
 
-func (v *Vanilla) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
-	if node.Type() == TerminalNode {
-		return node.Utility(node.Player())
-	} else if node.Type() == ChanceNode {
-		return v.handleChanceNode(node, reachP0, reachP1, reachChance)
+func (v *Vanilla) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64, depth int) float64 {
+	if depth < 10 {
+		glog.Infof("[depth=%d] %v", depth, node)
 	}
 
-	return v.handlePlayerNode(node, reachP0, reachP1, reachChance)
+	switch node.Type() {
+	case TerminalNode:
+		return node.Utility(node.Player())
+	case ChanceNode:
+		return v.handleChanceNode(node, reachP0, reachP1, reachChance, depth)
+	default:
+		return v.handlePlayerNode(node, reachP0, reachP1, reachChance, depth)
+	}
 }
 
-func (v *Vanilla) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
+func (v *Vanilla) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float64, depth int) float64 {
 	expectedValue := 0.0
 	n := 0
 	node.VisitChildren(func(child GameTreeNode, p float64) {
-		expectedValue += v.runHelper(child, reachP0, reachP1, reachChance*p)
+		expectedValue += v.runHelper(child, reachP0, reachP1, reachChance*p, depth+1)
 		n++
 	})
 
 	return expectedValue / float64(n)
 }
 
-func (v *Vanilla) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
+func (v *Vanilla) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float64, depth int) float64 {
 	player := node.Player()
-	actionUtils := v.slicePool.alloc(0)
-	defer v.slicePool.free(actionUtils)
+	actionUtils := v.slicePool.Get().([]float64)
+	defer v.slicePool.Put(actionUtils[:0])
 	node.VisitChildren(func(child GameTreeNode, p float64) {
 		var u float64
 		if player == 0 {
-			u = -1 * v.runHelper(child, p*reachP0, reachP1, reachChance)
+			u = -1 * v.runHelper(child, p*reachP0, reachP1, reachChance, depth+1)
 		} else {
-			u = -1 * v.runHelper(child, reachP0, p*reachP1, reachChance)
+			u = -1 * v.runHelper(child, reachP0, p*reachP1, reachChance, depth+1)
 		}
 
 		actionUtils = append(actionUtils, u)
 	})
 
 	policy := v.getPolicy(node, len(actionUtils))
-	var reachProb float64
-	if player == 0 {
-		reachProb = reachP0 * reachChance
-	} else {
-		reachProb = reachP1 * reachChance
-	}
-	policy.reachProb += reachProb
-
-	util := floats.Dot(actionUtils, policy.strategy)
-	// The probability of reaching this node, assuming that the current player
-	// tried to reach it.
+	reachP := reachProb(player, reachP0, reachP1, reachChance)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
-	for i := range actionUtils {
-		regret := actionUtils[i] - util
-		policy.regretSum[i] += counterFactualP * regret
-	}
-
-	return util
-}
-
-func counterFactualProb(player int, reachP0, reachP1, reachChance float64) float64 {
-	if player == 0 {
-		return reachP1 * reachChance
-	} else {
-		return reachP0 * reachChance
-	}
+	return policy.update(actionUtils, reachP, counterFactualP)
 }
 
 func (v *Vanilla) getPolicy(node GameTreeNode, nActions int) *policy {
 	p := node.Player()
 	is := node.InfoSet(p)
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	if policy, ok := v.strategyProfile[p][is]; ok {
 		if policy.numActions() != nActions {
+			b64IS := base64.StdEncoding.EncodeToString([]byte(is))
 			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v - %v",
-				policy.numActions(), nActions, node, is))
+				policy.numActions(), nActions, node, b64IS))
 		}
 		return policy
 	}
@@ -130,86 +131,4 @@ func (v *Vanilla) getPolicy(node GameTreeNode, nActions int) *policy {
 		glog.Infof("Player %d - %d infosets", p, len(v.strategyProfile[p]))
 	}
 	return policy
-}
-
-type policy struct {
-	reachProb   float64
-	regretSum   []float64
-	strategy    []float64
-	strategySum []float64
-}
-
-func newPolicy(nActions int) *policy {
-	return &policy{
-		reachProb:   0.0,
-		regretSum:   make([]float64, nActions),
-		strategy:    uniformDist(nActions),
-		strategySum: make([]float64, nActions),
-	}
-}
-
-func (p *policy) numActions() int {
-	return len(p.strategy)
-}
-
-func (p *policy) nextStrategy() {
-	floats.AddScaled(p.strategySum, p.reachProb, p.strategy)
-	p.strategy = p.calcStrategy()
-	p.reachProb = 0.0
-}
-
-func (p *policy) calcStrategy() []float64 {
-	strat := make([]float64, len(p.regretSum))
-	copy(strat, p.regretSum)
-	makePositive(strat)
-	total := floats.Sum(strat)
-	if total > 0 {
-		vecDiv(strat, total)
-		return strat
-	}
-
-	return uniformDist(len(strat))
-}
-
-func (p *policy) getAverageStrategy() []float64 {
-	total := floats.Sum(p.strategySum)
-	if total > 0 {
-		avgStrat := make([]float64, len(p.strategySum))
-		copy(avgStrat, p.strategySum)
-		vecDiv(p.strategySum, total)
-		purify(avgStrat, 0.001)
-		total := floats.Sum(avgStrat)
-		vecDiv(avgStrat, total) // Re-normalize.
-		return avgStrat
-	}
-
-	return uniformDist(len(p.strategy))
-}
-
-func uniformDist(n int) []float64 {
-	result := make([]float64, n)
-	floats.AddConst(1.0/float64(n), result)
-	return result
-}
-
-func makePositive(v []float64) {
-	for i := range v {
-		if v[i] < 0 {
-			v[i] = 0.0
-		}
-	}
-}
-
-func vecDiv(v []float64, c float64) {
-	for i := range v {
-		v[i] /= c
-	}
-}
-
-func purify(v []float64, tol float64) {
-	for i := range v {
-		if v[i] < tol {
-			v[i] = 0.0
-		}
-	}
 }

@@ -62,6 +62,7 @@ Some additional CFR algorithms that could be implemented:
 - Monte Carlo CFR:
     - Chance Sampling CFR: http://mlanctot.info/files/papers/nips09mccfr.pdf
     - External Sampling CFR: http://mlanctot.info/files/papers/nips09mccfr.pdf
+    - Outcome Sampling CFR: https://papers.nips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions.pdf
     - Average Strategy CFR: https://papers.nips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions.pdf
 - Deep CFR: https://arxiv.org/abs/1811.00164
 - Single Deep CFR: https://arxiv.org/abs/1901.07621
