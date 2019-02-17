@@ -145,24 +145,27 @@ func (k PokerNode) String() string {
 		k.player, k.history, k.p0Card, k.p1Card)
 }
 
-// NumChildren implements cfr.GameTreeNode.
-func (k PokerNode) NumChildren() int {
-	return len(k.children)
+// VisitChildren implements cfr.GameTreeNode.
+func (k PokerNode) VisitChildren(visitor cfr.Visitor) {
+	var p float64
+	for i, child := range k.children {
+		if len(k.probabilities) > 0 {
+			p = k.probabilities[i]
+		}
+
+		visitor(child, p)
+	}
 }
 
-// GetChild implements cfr.GameTreeNode.
-func (k PokerNode) GetChild(i int) cfr.GameTreeNode {
-	return k.children[i]
-}
+// Type implements cfr.GameTreeNode.
+func (k PokerNode) Type() cfr.NodeType {
+	if len(k.children) == 0 {
+		return cfr.TerminalNode
+	} else if k.player == chance {
+		return cfr.ChanceNode
+	}
 
-// IsChance implements cfr.GameTreeNode.
-func (k PokerNode) IsChance() bool {
-	return k.player == chance
-}
-
-// GetChildProbability implements cfr.GameTreeNode.
-func (k PokerNode) GetChildProbability(i int) float64 {
-	return k.probabilities[i]
+	return cfr.PlayerNode
 }
 
 // Player implements cfr.GameTreeNode.
