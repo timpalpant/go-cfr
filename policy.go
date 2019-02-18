@@ -66,10 +66,7 @@ func (p *policy) getAverageStrategy() []float64 {
 	if total > 0 {
 		avgStrat := make([]float64, len(p.strategySum))
 		copy(avgStrat, p.strategySum)
-		vecDiv(p.strategySum, total)
-		purify(avgStrat, 0.001)
-		total := floats.Sum(avgStrat)
-		vecDiv(avgStrat, total) // Re-normalize.
+		vecDiv(avgStrat, total)
 		return avgStrat
 	}
 
