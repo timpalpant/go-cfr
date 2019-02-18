@@ -8,10 +8,10 @@ func Visit(root cfr.GameTreeNode, visitor func(node cfr.GameTreeNode)) {
 	visitor(root)
 
 	root.BuildChildren()
-	defer root.FreeChildren()
 	for i := 0; i < root.NumChildren(); i++ {
 		Visit(root.GetChild(i), visitor)
 	}
+	root.FreeChildren()
 }
 
 func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet string)) {

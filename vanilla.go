@@ -50,16 +50,19 @@ func (v *Vanilla) nextStrategyProfile() {
 
 func (v *Vanilla) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
 	node.BuildChildren()
-	defer node.FreeChildren()
 
+	var ev float64
 	switch node.Type() {
 	case TerminalNode:
-		return node.Utility(node.Player())
+		ev = node.Utility(node.Player())
 	case ChanceNode:
-		return v.handleChanceNode(node, reachP0, reachP1, reachChance)
+		ev = v.handleChanceNode(node, reachP0, reachP1, reachChance)
 	default:
-		return v.handlePlayerNode(node, reachP0, reachP1, reachChance)
+		ev = v.handlePlayerNode(node, reachP0, reachP1, reachChance)
 	}
+
+	node.FreeChildren()
+	return ev
 }
 
 func (v *Vanilla) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
