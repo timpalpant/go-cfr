@@ -41,7 +41,7 @@ func TestPoker_VanillaCFR(t *testing.T) {
 		}
 	}
 
-	tree.VisitInfoSets(root, func(player int, infoSet string) {
+	tree.VisitInfoSets(root, func(player int, infoSet cfr.InfoSet) {
 		strat := vanillaCFR.GetStrategy(player, infoSet)
 		if strat != nil {
 			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
@@ -51,18 +51,18 @@ func TestPoker_VanillaCFR(t *testing.T) {
 
 func TestPoker_ChanceSamplingCFR(t *testing.T) {
 	root := NewGame()
-	vanillaCFR := cfr.New(cfr.Params{SampleChanceNodes: true})
+	csCFR := cfr.New(cfr.Params{SampleChanceNodes: true})
 	expectedValue := 0.0
 	nIter := 100000
 	for i := 1; i <= nIter; i++ {
-		expectedValue += vanillaCFR.Run(root)
+		expectedValue += csCFR.Run(root)
 		if i%(nIter/10) == 0 {
 			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float64(i))
 		}
 	}
 
-	tree.VisitInfoSets(root, func(player int, infoSet string) {
-		strat := vanillaCFR.GetStrategy(player, infoSet)
+	tree.VisitInfoSets(root, func(player int, infoSet cfr.InfoSet) {
+		strat := csCFR.GetStrategy(player, infoSet)
 		if strat != nil {
 			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
 		}

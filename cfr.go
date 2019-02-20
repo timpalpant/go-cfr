@@ -1,7 +1,6 @@
 package cfr
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 
@@ -9,29 +8,32 @@ import (
 )
 
 type Params struct {
-	SampleChanceNodes bool
+	SampleChanceNodes bool // Chance Sampling
+	// TODO: Not yet implemented.
+	//SamplePlayerActions bool  // External Sampling
+	//SampleOpponentActions bool  // Outcome Sampling
 }
 
 type CFR struct {
 	sampleChanceNodes bool
 
 	// Map of player -> InfoSet -> Strategy for that InfoSet.
-	strategyProfile map[int]map[string]*policy
+	strategyProfile map[int]map[InfoSet]*policy
 	slicePool       *floatSlicePool
 }
 
 func New(params Params) *CFR {
 	return &CFR{
 		sampleChanceNodes: params.SampleChanceNodes,
-		strategyProfile: map[int]map[string]*policy{
-			0: make(map[string]*policy),
-			1: make(map[string]*policy),
+		strategyProfile: map[int]map[InfoSet]*policy{
+			0: make(map[InfoSet]*policy),
+			1: make(map[InfoSet]*policy),
 		},
 		slicePool: &floatSlicePool{},
 	}
 }
 
-func (c *CFR) GetStrategy(player int, infoSet string) []float64 {
+func (c *CFR) GetStrategy(player int, infoSet InfoSet) []float64 {
 	policy := c.strategyProfile[player][infoSet]
 	if policy == nil {
 		return nil
@@ -124,9 +126,8 @@ func (c *CFR) getPolicy(node GameTreeNode) *policy {
 
 	if policy, ok := c.strategyProfile[p][is]; ok {
 		if policy.numActions() != node.NumChildren() {
-			b64IS := hex.EncodeToString([]byte(is))
-			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v - %v",
-				policy.numActions(), node.NumChildren(), node, b64IS))
+			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v",
+				policy.numActions(), node.NumChildren(), node))
 		}
 		return policy
 	}
