@@ -1,22 +1,18 @@
 package cfr
 
-import (
-	"gonum.org/v1/gonum/floats"
-)
-
 type policy struct {
-	reachProb   float64
-	regretSum   []float64
-	strategy    []float64
-	strategySum []float64
+	reachProb   float32
+	regretSum   []float32
+	strategy    []float32
+	strategySum []float32
 }
 
 func newPolicy(nActions int) *policy {
 	return &policy{
 		reachProb:   0.0,
-		regretSum:   make([]float64, nActions),
+		regretSum:   make([]float32, nActions),
 		strategy:    uniformDist(nActions),
-		strategySum: make([]float64, nActions),
+		strategySum: make([]float32, nActions),
 	}
 }
 
@@ -25,16 +21,16 @@ func (p *policy) numActions() int {
 }
 
 func (p *policy) nextStrategy() {
-	floats.AddScaled(p.strategySum, p.reachProb, p.strategy)
+	addScaled(p.strategySum, p.reachProb, p.strategy)
 	p.strategy = p.calcStrategyUnsafe()
 	p.reachProb = 0.0
 }
 
-func (p *policy) calcStrategyUnsafe() []float64 {
-	strat := make([]float64, len(p.regretSum))
+func (p *policy) calcStrategyUnsafe() []float32 {
+	strat := make([]float32, len(p.regretSum))
 	copy(strat, p.regretSum)
 	makePositive(strat)
-	total := floats.Sum(strat)
+	total := sum(strat)
 	if total > 0 {
 		vecDiv(strat, total)
 		return strat
@@ -43,10 +39,10 @@ func (p *policy) calcStrategyUnsafe() []float64 {
 	return uniformDist(len(strat))
 }
 
-func (p *policy) getAverageStrategy() []float64 {
-	total := floats.Sum(p.strategySum)
+func (p *policy) getAverageStrategy() []float32 {
+	total := sum(p.strategySum)
 	if total > 0 {
-		avgStrat := make([]float64, len(p.strategySum))
+		avgStrat := make([]float32, len(p.strategySum))
 		copy(avgStrat, p.strategySum)
 		vecDiv(avgStrat, total)
 		return avgStrat
@@ -55,9 +51,9 @@ func (p *policy) getAverageStrategy() []float64 {
 	return uniformDist(len(p.strategy))
 }
 
-func (p *policy) update(actionUtils []float64, reachProb, counterFactualProb float64) float64 {
+func (p *policy) update(actionUtils []float32, reachProb, counterFactualProb float32) float32 {
 	p.reachProb += reachProb
-	util := floats.Dot(actionUtils, p.strategy)
+	util := dot(actionUtils, p.strategy)
 	for i := range actionUtils {
 		regret := actionUtils[i] - util
 		p.regretSum[i] += counterFactualProb * regret
@@ -66,13 +62,15 @@ func (p *policy) update(actionUtils []float64, reachProb, counterFactualProb flo
 	return util
 }
 
-func uniformDist(n int) []float64 {
-	result := make([]float64, n)
-	floats.AddConst(1.0/float64(n), result)
+func uniformDist(n int) []float32 {
+	result := make([]float32, n)
+	for i := range result {
+		result[i] = 1.0 / float32(n)
+	}
 	return result
 }
 
-func makePositive(v []float64) {
+func makePositive(v []float32) {
 	for i := range v {
 		if v[i] < 0 {
 			v[i] = 0.0
@@ -80,13 +78,38 @@ func makePositive(v []float64) {
 	}
 }
 
-func vecDiv(v []float64, c float64) {
+// We can replace this with something from gonum.org/v1/gonum/internal/asm/f32
+// if it is performance critical.
+func addScaled(dst []float32, c float32, x []float32) {
+	for i := range x {
+		dst[i] = c * x[i]
+	}
+}
+
+func sum(x []float32) float32 {
+	var result float32
+	for _, xi := range x {
+		result += xi
+	}
+	return result
+}
+
+// SIMD dot function is here if needed: https://godoc.org/gonum.org/v1/gonum/internal/asm/f32#DotUnitary
+func dot(x, y []float32) float32 {
+	var result float32
+	for i := range x {
+		result += x[i] * y[i]
+	}
+	return result
+}
+
+func vecDiv(v []float32, c float32) {
 	for i := range v {
 		v[i] /= c
 	}
 }
 
-func purify(v []float64, tol float64) {
+func purify(v []float32, tol float32) {
 	for i := range v {
 		if v[i] < tol {
 			v[i] = 0.0

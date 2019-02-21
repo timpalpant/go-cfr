@@ -14,6 +14,8 @@ type Params struct {
 	// Maximum number of parallel jobs to use.
 	// If zero, then use the number of cpus as returned by runtime.NumCPU().
 	MaxNumWorkers int
+	// Strategy probabilities below this value will be set to zero.
+	PurificationThreshold float32
 }
 
 type CFR struct {
@@ -35,7 +37,7 @@ func New(params Params) *CFR {
 	}
 }
 
-func (c *CFR) GetStrategy(player int, infoSet InfoSet) []float64 {
+func (c *CFR) GetStrategy(player int, infoSet InfoSet) []float32 {
 	policy := c.strategyProfile[player][infoSet]
 	if policy == nil {
 		return nil
@@ -44,7 +46,7 @@ func (c *CFR) GetStrategy(player int, infoSet InfoSet) []float64 {
 	return policy.getAverageStrategy()
 }
 
-func (c *CFR) Run(node GameTreeNode) float64 {
+func (c *CFR) Run(node GameTreeNode) float32 {
 	expectedValue := c.runHelper(node, 1.0, 1.0, 1.0)
 	c.nextStrategyProfile()
 	return expectedValue
@@ -58,10 +60,10 @@ func (c *CFR) nextStrategyProfile() {
 	}
 }
 
-func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
+func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
 	node.BuildChildren()
 
-	var ev float64
+	var ev float32
 	switch node.Type() {
 	case TerminalNode:
 		ev = node.Utility(node.Player())
@@ -75,23 +77,23 @@ func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64
 	return ev
 }
 
-func (c *CFR) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
+func (c *CFR) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
 	if c.sampleChanceNodes {
 		child := node.SampleChild()
 		return c.runHelper(child, reachP0, reachP1, reachChance)
 	}
 
-	expectedValue := 0.0
+	var expectedValue float32
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
 		p := node.GetChildProbability(i)
 		expectedValue += c.runHelper(child, reachP0, reachP1, reachChance*p)
 	}
 
-	return expectedValue / float64(node.NumChildren())
+	return expectedValue / float32(node.NumChildren())
 }
 
-func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
+func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
 	if node.NumChildren() == 1 { // Fast path for trivial nodes with no real choice.
 		child := node.GetChild(0)
 		return -1 * c.runHelper(child, reachP0, reachP1, reachChance)
@@ -137,7 +139,7 @@ func (c *CFR) getPolicy(node GameTreeNode) *policy {
 	return policy
 }
 
-func reachProb(player int, reachP0, reachP1, reachChance float64) float64 {
+func reachProb(player int, reachP0, reachP1, reachChance float32) float32 {
 	if player == 0 {
 		return reachP0 * reachChance
 	} else {
@@ -147,7 +149,7 @@ func reachProb(player int, reachP0, reachP1, reachChance float64) float64 {
 
 // The probability of reaching this node, assuming that the current player
 // tried to reach it.
-func counterFactualProb(player int, reachP0, reachP1, reachChance float64) float64 {
+func counterFactualProb(player int, reachP0, reachP1, reachChance float32) float32 {
 	if player == 0 {
 		return reachP1 * reachChance
 	} else {

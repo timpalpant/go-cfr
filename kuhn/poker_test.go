@@ -32,12 +32,12 @@ func TestPoker_InfoSets(t *testing.T) {
 func TestPoker_VanillaCFR(t *testing.T) {
 	root := NewGame()
 	vanillaCFR := cfr.New(cfr.Params{})
-	expectedValue := 0.0
+	var expectedValue float32
 	nIter := 10000
 	for i := 1; i <= nIter; i++ {
 		expectedValue += vanillaCFR.Run(root)
 		if i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float64(i))
+			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
 		}
 	}
 
@@ -52,12 +52,12 @@ func TestPoker_VanillaCFR(t *testing.T) {
 func TestPoker_ChanceSamplingCFR(t *testing.T) {
 	root := NewGame()
 	csCFR := cfr.New(cfr.Params{SampleChanceNodes: true})
-	expectedValue := 0.0
+	var expectedValue float32
 	nIter := 100000
 	for i := 1; i <= nIter; i++ {
 		expectedValue += csCFR.Run(root)
 		if i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float64(i))
+			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
 		}
 	}
 
