@@ -19,7 +19,7 @@ type Params struct {
 }
 
 type CFR struct {
-	sampleChanceNodes bool
+	params Params
 
 	// Map of player -> InfoSet -> Strategy for that InfoSet.
 	strategyProfile map[int]map[string]*policy
@@ -28,7 +28,7 @@ type CFR struct {
 
 func New(params Params) *CFR {
 	return &CFR{
-		sampleChanceNodes: params.SampleChanceNodes,
+		params: params,
 		strategyProfile: map[int]map[string]*policy{
 			0: make(map[string]*policy),
 			1: make(map[string]*policy),
@@ -78,7 +78,7 @@ func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float32
 }
 
 func (c *CFR) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
-	if c.sampleChanceNodes {
+	if c.params.SampleChanceNodes {
 		child := node.SampleChild()
 		return c.runHelper(child, reachP0, reachP1, reachChance)
 	}
