@@ -79,18 +79,16 @@ func (c *CFR) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	if c.sampleChanceNodes {
 		child := node.SampleChild()
 		return c.runHelper(child, reachP0, reachP1, reachChance)
-	} else {
-		expectedValue := 0.0
-		for i := 0; i < node.NumChildren(); i++ {
-			child := node.GetChild(i)
-			p := node.GetChildProbability(i)
-			expectedValue += c.runHelper(child, reachP0, reachP1, reachChance*p)
-		}
-
-		return expectedValue / float64(node.NumChildren())
 	}
 
-	panic("unreachable code")
+	expectedValue := 0.0
+	for i := 0; i < node.NumChildren(); i++ {
+		child := node.GetChild(i)
+		p := node.GetChildProbability(i)
+		expectedValue += c.runHelper(child, reachP0, reachP1, reachChance*p)
+	}
+
+	return expectedValue / float64(node.NumChildren())
 }
 
 func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
