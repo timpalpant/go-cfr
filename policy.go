@@ -22,11 +22,11 @@ func (p *policy) numActions() int {
 
 func (p *policy) nextStrategy() {
 	addScaled(p.strategySum, p.reachProb, p.strategy)
-	p.strategy = p.calcStrategyUnsafe()
+	p.strategy = p.calcStrategy()
 	p.reachProb = 0.0
 }
 
-func (p *policy) calcStrategyUnsafe() []float32 {
+func (p *policy) calcStrategy() []float32 {
 	strat := make([]float32, len(p.regretSum))
 	copy(strat, p.regretSum)
 	makePositive(strat)
@@ -82,7 +82,7 @@ func makePositive(v []float32) {
 // if it is performance critical.
 func addScaled(dst []float32, c float32, x []float32) {
 	for i := range x {
-		dst[i] = c * x[i]
+		dst[i] += c * x[i]
 	}
 }
 
