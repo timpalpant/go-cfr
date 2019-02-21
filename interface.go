@@ -1,7 +1,5 @@
 package cfr
 
-import "fmt"
-
 type NodeType int
 
 const (
@@ -9,22 +7,6 @@ const (
 	TerminalNode
 	PlayerNode
 )
-
-// InfoSet represents the information partition for a particular
-// player at a particular point in the game.
-type InfoSet struct {
-	// Public is the component of the information set that is public
-	// information available to all players.
-	Public string
-	// Private is the component of the information set that is hidden
-	// knowledge known only by this player.
-	Private string
-}
-
-// String implements fmt.Stringer.
-func (is InfoSet) String() string {
-	return fmt.Sprintf("{public: %s, private: %s}", is.Public, is.Private)
-}
 
 // GameTreeNode is the interface for a node in an extensive-form game tree.
 type GameTreeNode interface {
@@ -56,7 +38,7 @@ type GameTreeNode interface {
 	// It may only be called for nodes with IsChance() == false.
 	Player() int
 	// InfoSet returns the information set for this node for the given player.
-	InfoSet(player int) InfoSet
+	InfoSet(player int) string
 	// Utility returns this node's utility for the given player.
 	// It must only be called for nodes with type == Terminal.
 	Utility(player int) float32

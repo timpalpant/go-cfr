@@ -165,11 +165,8 @@ func (k *PokerNode) Utility(player int) float32 {
 }
 
 // InfoSet implements cfr.GameTreeNode.
-func (k *PokerNode) InfoSet(player int) cfr.InfoSet {
-	return cfr.InfoSet{
-		Public:  k.history,
-		Private: k.playerCard(player).String(),
-	}
+func (k *PokerNode) InfoSet(player int) string {
+	return k.playerCard(player).String() + "-" + k.history
 }
 
 func (k *PokerNode) playerCard(player int) Card {

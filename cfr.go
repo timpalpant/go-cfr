@@ -22,22 +22,22 @@ type CFR struct {
 	sampleChanceNodes bool
 
 	// Map of player -> InfoSet -> Strategy for that InfoSet.
-	strategyProfile map[int]map[InfoSet]*policy
+	strategyProfile map[int]map[string]*policy
 	slicePool       *floatSlicePool
 }
 
 func New(params Params) *CFR {
 	return &CFR{
 		sampleChanceNodes: params.SampleChanceNodes,
-		strategyProfile: map[int]map[InfoSet]*policy{
-			0: make(map[InfoSet]*policy),
-			1: make(map[InfoSet]*policy),
+		strategyProfile: map[int]map[string]*policy{
+			0: make(map[string]*policy),
+			1: make(map[string]*policy),
 		},
 		slicePool: &floatSlicePool{},
 	}
 }
 
-func (c *CFR) GetStrategy(player int, infoSet InfoSet) []float32 {
+func (c *CFR) GetStrategy(player int, infoSet string) []float32 {
 	policy := c.strategyProfile[player][infoSet]
 	if policy == nil {
 		return nil
