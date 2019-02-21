@@ -1,5 +1,9 @@
 package cfr
 
+import (
+	"github.com/timpalpant/go-cfr/internal/f32"
+)
+
 type policy struct {
 	reachProb   float32
 	regretSum   []float32
@@ -21,30 +25,30 @@ func (p *policy) numActions() int {
 }
 
 func (p *policy) nextStrategy() {
-	addScaled(p.strategySum, p.reachProb, p.strategy)
-	p.strategy = p.calcStrategy()
+	f32.AxpyUnitary(p.reachProb, p.strategy, p.strategySum)
+	p.calcStrategy()
 	p.reachProb = 0.0
 }
 
-func (p *policy) calcStrategy() []float32 {
-	strat := make([]float32, len(p.regretSum))
-	copy(strat, p.regretSum)
-	makePositive(strat)
-	total := sum(strat)
+func (p *policy) calcStrategy() {
+	copy(p.strategy, p.regretSum)
+	makePositive(p.strategy)
+	total := f32.Sum(p.strategy)
 	if total > 0 {
-		vecDiv(strat, total)
-		return strat
+		f32.ScalUnitary(1.0/total, p.strategy)
+		return
 	}
 
-	return uniformDist(len(strat))
+	for i := range p.strategy {
+		p.strategy[i] = 1.0 / float32(len(p.strategy))
+	}
 }
 
 func (p *policy) getAverageStrategy() []float32 {
-	total := sum(p.strategySum)
+	total := f32.Sum(p.strategySum)
 	if total > 0 {
 		avgStrat := make([]float32, len(p.strategySum))
-		copy(avgStrat, p.strategySum)
-		vecDiv(avgStrat, total)
+		f32.ScalUnitaryTo(avgStrat, 1.0/total, p.strategySum)
 		return avgStrat
 	}
 
@@ -53,7 +57,7 @@ func (p *policy) getAverageStrategy() []float32 {
 
 func (p *policy) update(actionUtils []float32, reachProb, counterFactualProb float32) float32 {
 	p.reachProb += reachProb
-	util := dot(actionUtils, p.strategy)
+	util := f32.DotUnitary(actionUtils, p.strategy)
 	for i := range actionUtils {
 		regret := actionUtils[i] - util
 		p.regretSum[i] += counterFactualProb * regret
@@ -64,9 +68,8 @@ func (p *policy) update(actionUtils []float32, reachProb, counterFactualProb flo
 
 func uniformDist(n int) []float32 {
 	result := make([]float32, n)
-	for i := range result {
-		result[i] = 1.0 / float32(n)
-	}
+	p := 1.0 / float32(n)
+	f32.AddConst(p, result)
 	return result
 }
 
@@ -75,37 +78,6 @@ func makePositive(v []float32) {
 		if v[i] < 0 {
 			v[i] = 0.0
 		}
-	}
-}
-
-// We can replace this with something from gonum.org/v1/gonum/internal/asm/f32
-// if it is performance critical.
-func addScaled(dst []float32, c float32, x []float32) {
-	for i := range x {
-		dst[i] += c * x[i]
-	}
-}
-
-func sum(x []float32) float32 {
-	var result float32
-	for _, xi := range x {
-		result += xi
-	}
-	return result
-}
-
-// SIMD dot function is here if needed: https://godoc.org/gonum.org/v1/gonum/internal/asm/f32#DotUnitary
-func dot(x, y []float32) float32 {
-	var result float32
-	for i := range x {
-		result += x[i] * y[i]
-	}
-	return result
-}
-
-func vecDiv(v []float32, c float32) {
-	for i := range v {
-		v[i] /= c
 	}
 }
 

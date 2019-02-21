@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"io"
 
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
@@ -31,6 +32,7 @@ func Load(r io.Reader) (*CFR, error) {
 		return nil, errors.Wrap(err, "error decoding CFR header")
 	}
 
+	glog.Infof("Loading policies for %d players", hdr.NumPlayers)
 	strategyProfile := make(map[int]map[string]*policy)
 	for player := 0; player < hdr.NumPlayers; player++ {
 		playerHdr := playerHeader{}
@@ -38,6 +40,7 @@ func Load(r io.Reader) (*CFR, error) {
 			return nil, errors.Wrap(err, "error decoding player header")
 		}
 
+		glog.Infof("Loading %d policies for player %d", playerHdr.NumPolicies, player)
 		policyMap := make(map[string]*policy)
 		for i := 0; i < playerHdr.NumPolicies; i++ {
 			s := strategy{}
@@ -55,6 +58,7 @@ func Load(r io.Reader) (*CFR, error) {
 			policyMap[s.InfoSet] = p
 		}
 
+		glog.Infof("Loaded %d policies for player %d", len(policyMap), player)
 		strategyProfile[playerHdr.Player] = policyMap
 	}
 

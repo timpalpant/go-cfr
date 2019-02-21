@@ -134,7 +134,7 @@ func (c *CFR) getPolicy(node GameTreeNode) *policy {
 	policy := newPolicy(node.NumChildren())
 	c.strategyProfile[p][is] = policy
 	if len(c.strategyProfile[p])%100000 == 0 {
-		glog.Infof("Player %d - %d infosets", p, len(c.strategyProfile[p]))
+		glog.V(2).Infof("Player %d - %d infosets", p, len(c.strategyProfile[p]))
 	}
 	return policy
 }
