@@ -2,7 +2,6 @@ package cfr
 
 import (
 	"fmt"
-	"math/rand"
 
 	"github.com/golang/glog"
 )
@@ -12,6 +11,9 @@ type Params struct {
 	// TODO: Not yet implemented.
 	//SamplePlayerActions bool  // External Sampling
 	//SampleOpponentActions bool  // Outcome Sampling
+	// Maximum number of parallel jobs to use.
+	// If zero, then use the number of cpus as returned by runtime.NumCPU().
+	MaxNumWorkers int
 }
 
 type CFR struct {
@@ -75,16 +77,8 @@ func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float64
 
 func (c *CFR) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
 	if c.sampleChanceNodes {
-		x := rand.Float64()
-		cumP := 0.0
-		for i := 0; i < node.NumChildren(); i++ {
-			child := node.GetChild(i)
-			p := node.GetChildProbability(i)
-			cumP += p
-			if cumP > x {
-				return c.runHelper(child, reachP0, reachP1, reachChance)
-			}
-		}
+		child := node.SampleChild()
+		return c.runHelper(child, reachP0, reachP1, reachChance)
 	} else {
 		expectedValue := 0.0
 		for i := 0; i < node.NumChildren(); i++ {
@@ -100,6 +94,11 @@ func (c *CFR) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance 
 }
 
 func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float64) float64 {
+	if node.NumChildren() == 1 { // Fast path for trivial nodes with no real choice.
+		child := node.GetChild(0)
+		return -1 * c.runHelper(child, reachP0, reachP1, reachChance)
+	}
+
 	player := node.Player()
 	policy := c.getPolicy(node)
 	actionUtils := c.slicePool.alloc(node.NumChildren())
@@ -138,4 +137,22 @@ func (c *CFR) getPolicy(node GameTreeNode) *policy {
 		glog.Infof("Player %d - %d infosets", p, len(c.strategyProfile[p]))
 	}
 	return policy
+}
+
+func reachProb(player int, reachP0, reachP1, reachChance float64) float64 {
+	if player == 0 {
+		return reachP0 * reachChance
+	} else {
+		return reachP1 * reachChance
+	}
+}
+
+// The probability of reaching this node, assuming that the current player
+// tried to reach it.
+func counterFactualProb(player int, reachP0, reachP1, reachChance float64) float64 {
+	if player == 0 {
+		return reachP1 * reachChance
+	} else {
+		return reachP0 * reachChance
+	}
 }

@@ -4,6 +4,7 @@ package kuhn
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/timpalpant/go-cfr"
 )
@@ -100,6 +101,12 @@ func (k *PokerNode) GetChildProbability(i int) float64 {
 	return k.probabilities[i]
 }
 
+// SampleChild implements cfr.GameTreeNode.
+func (k *PokerNode) SampleChild() cfr.GameTreeNode {
+	n := rand.Intn(k.NumChildren())
+	return k.GetChild(n)
+}
+
 // Type implements cfr.GameTreeNode.
 func (k *PokerNode) Type() cfr.NodeType {
 	if k.IsTerminal() {
@@ -159,11 +166,10 @@ func (k *PokerNode) Utility(player int) float64 {
 
 // InfoSet implements cfr.GameTreeNode.
 func (k *PokerNode) InfoSet(player int) cfr.InfoSet {
-	is := cfr.InfoSet{}
-	copy(is.Public[0:], k.history)
-	s := k.playerCard(player).String()
-	copy(is.Private[0:], s)
-	return is
+	return cfr.InfoSet{
+		Public:  k.history,
+		Private: k.playerCard(player).String(),
+	}
 }
 
 func (k *PokerNode) playerCard(player int) Card {

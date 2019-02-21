@@ -1,5 +1,7 @@
 package cfr
 
+import "fmt"
+
 type NodeType int
 
 const (
@@ -8,20 +10,20 @@ const (
 	PlayerNode
 )
 
-const MaxInfoSetSize = 48
-
 // InfoSet represents the information partition for a particular
 // player at a particular point in the game.
-//
-// InfoSet uses pre-sized arrays, rather than slices, to avoid
-// allocations because empirically it is faster (duffcopy vs. malloc/gc).
 type InfoSet struct {
 	// Public is the component of the information set that is public
 	// information available to all players.
-	Public [MaxInfoSetSize]byte
+	Public string
 	// Private is the component of the information set that is hidden
 	// knowledge known only by this player.
-	Private [MaxInfoSetSize]byte
+	Private string
+}
+
+// String implements fmt.Stringer.
+func (is InfoSet) String() string {
+	return fmt.Sprintf("{public: %s, private: %s}", is.Public, is.Private)
 }
 
 // GameTreeNode is the interface for a node in an extensive-form game tree.
@@ -45,6 +47,9 @@ type GameTreeNode interface {
 	// Get the probability of the ith child of this node.
 	// May only be called for nodes with Type == Chance.
 	GetChildProbability(i int) float64
+	// Sample one of the children of this node, according to the probability
+	// distribution. Only applicable for nodes with Type == Chance.
+	SampleChild() GameTreeNode
 
 	// Player returns this current node's acting player.
 	//

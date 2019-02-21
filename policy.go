@@ -4,24 +4,6 @@ import (
 	"gonum.org/v1/gonum/floats"
 )
 
-func reachProb(player int, reachP0, reachP1, reachChance float64) float64 {
-	if player == 0 {
-		return reachP0 * reachChance
-	} else {
-		return reachP1 * reachChance
-	}
-}
-
-// The probability of reaching this node, assuming that the current player
-// tried to reach it.
-func counterFactualProb(player int, reachP0, reachP1, reachChance float64) float64 {
-	if player == 0 {
-		return reachP1 * reachChance
-	} else {
-		return reachP0 * reachChance
-	}
-}
-
 type policy struct {
 	reachProb   float64
 	regretSum   []float64
