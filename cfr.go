@@ -2,24 +2,24 @@ package cfr
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/golang/glog"
 )
 
 type Params struct {
-	SampleChanceNodes bool // Chance Sampling
-	// TODO: Not yet implemented.
-	//SamplePlayerActions bool  // External Sampling
-	//SampleOpponentActions bool  // Outcome Sampling
-	// Maximum number of parallel jobs to use.
-	// If zero, then use the number of cpus as returned by runtime.NumCPU().
-	MaxNumWorkers int
+	SampleChanceNodes     bool // Chance Sampling
+	SamplePlayerActions   bool // Outcome Sampling
+	SampleOpponentActions bool // External Sampling
+	UseRegretMatchingPlus bool // CFR+
 	// Strategy probabilities below this value will be set to zero.
 	PurificationThreshold float32
 }
 
 type CFR struct {
 	params Params
+
+	iter int
 
 	// Map of player -> InfoSet -> Strategy for that InfoSet.
 	strategyProfile map[int]map[string]*policy
@@ -58,6 +58,8 @@ func (c *CFR) nextStrategyProfile() {
 			p.nextStrategy()
 		}
 	}
+
+	c.iter++
 }
 
 func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
@@ -101,6 +103,25 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 
 	player := node.Player()
 	policy := c.getPolicy(node)
+	if c.params.SampleOpponentActions && c.iter%2 != player {
+		// Sample according to current strategy profile.
+		x := rand.Float32()
+		var cumProb float32
+		for i, p := range policy.strategy {
+			cumProb += p
+			if cumProb > x {
+				child := node.GetChild(i)
+				if player == 0 {
+					return -1 * c.runHelper(child, p*reachP0, reachP1, reachChance)
+				} else {
+					return -1 * c.runHelper(child, reachP0, p*reachP1, reachChance)
+				}
+			}
+		}
+
+		panic("unreachable code")
+	}
+
 	actionUtils := c.slicePool.alloc(node.NumChildren())
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)

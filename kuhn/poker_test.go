@@ -70,6 +70,29 @@ func TestPoker_ChanceSamplingCFR(t *testing.T) {
 	})
 }
 
+func TestPoker_ExternalSamplingCFR(t *testing.T) {
+	root := NewGame()
+	esCFR := cfr.New(cfr.Params{
+		SampleChanceNodes:     true,
+		SampleOpponentActions: true,
+	})
+	var expectedValue float32
+	nIter := 100000
+	for i := 1; i <= nIter; i++ {
+		expectedValue += esCFR.Run(root)
+		if i%(nIter/10) == 0 {
+			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
+		}
+	}
+
+	tree.VisitInfoSets(root, func(player int, infoSet string) {
+		strat := esCFR.GetStrategy(player, infoSet)
+		if strat != nil {
+			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
+		}
+	})
+}
+
 func TestPoker_LoadSave(t *testing.T) {
 	root := NewGame()
 	csCFR := cfr.New(cfr.Params{})
