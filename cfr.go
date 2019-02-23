@@ -37,6 +37,7 @@ type CFR struct {
 func New(params Params) *CFR {
 	return &CFR{
 		params: params,
+		iter:   1,
 		strategyProfile: map[int]map[string]*policy{
 			0: make(map[string]*policy),
 			1: make(map[string]*policy),
@@ -61,7 +62,7 @@ func (c *CFR) Run(node GameTreeNode) float32 {
 }
 
 func (c *CFR) nextStrategyProfile() {
-	discountPos, discountNeg, discountSum := getDiscountFactors(c.params, c.iter+1)
+	discountPos, discountNeg, discountSum := getDiscountFactors(c.params, c.iter)
 	glog.V(1).Infof("Updating %d policies", len(c.needsUpdate))
 	for _, p := range c.needsUpdate {
 		p.nextStrategy(discountPos, discountNeg, discountSum)
@@ -223,7 +224,7 @@ func getDiscountFactors(params Params, iter int) (positive, negative, sum float3
 	// Linear CFR is equivalent to weighting the reach prob on each
 	// iteration by (t / (t+1)), and this reduces numerical instability.
 	if params.LinearWeighting {
-		sum = float32(iter+1) / float32(iter+1)
+		sum = float32(iter) / float32(iter+1)
 	}
 
 	if params.UseRegretMatchingPlus {
