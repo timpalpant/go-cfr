@@ -94,38 +94,3 @@ func testCFR(t *testing.T, params cfr.Params, nIter int) {
 		}
 	})
 }
-
-func TestPoker_LoadSave(t *testing.T) {
-	root := NewGame()
-	csCFR := cfr.New(cfr.Params{})
-	var expectedValue float32
-	for i := 1; i <= 10; i++ {
-		expectedValue += csCFR.Run(root)
-	}
-
-	strategy := make(map[string][]float32)
-	tree.VisitInfoSets(root, func(player int, infoSet string) {
-		strategy[infoSet] = csCFR.GetStrategy(player, infoSet)
-	})
-
-	var buf bytes.Buffer
-	csCFR.Save(&buf)
-
-	var err error
-	csCFR, err = cfr.Load(&buf)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tree.VisitInfoSets(root, func(player int, infoSet string) {
-		strat := csCFR.GetStrategy(player, infoSet)
-		prevStrat := strategy[infoSet]
-		if prevStrat == nil && strat == nil {
-			return
-		} else if len(strat) != len(prevStrat) || strat[0] != prevStrat[0] || strat[1] != prevStrat[1] {
-			t.Errorf("failed to reload policy: expected %v, got %v", prevStrat, strat)
-		}
-	})
-
-	csCFR.Run(root)
-}
