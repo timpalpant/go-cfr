@@ -2,17 +2,21 @@ package cfr
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 
 	"github.com/golang/glog"
 )
 
 type Params struct {
-	SampleChanceNodes     bool // Chance Sampling
-	SamplePlayerActions   bool // Outcome Sampling
-	SampleOpponentActions bool // External Sampling
-	UseRegretMatchingPlus bool // CFR+
-	LinearWeighting       bool // Linear CFR
+	SampleChanceNodes     bool    // Chance Sampling
+	SamplePlayerActions   bool    // Outcome Sampling
+	SampleOpponentActions bool    // External Sampling
+	UseRegretMatchingPlus bool    // CFR+
+	LinearWeighting       bool    // Linear CFR
+	DiscountAlpha         float32 // Discounted CFR
+	DiscountBeta          float32 // Discounted CFR
+	DiscountGamma         float32 // Discounted CFR
 	// Strategy probabilities below this value will be set to zero.
 	PurificationThreshold float32
 }
@@ -44,7 +48,7 @@ func (c *CFR) GetStrategy(player int, infoSet string) []float32 {
 		return nil
 	}
 
-	return policy.getAverageStrategy()
+	return policy.getAverageStrategy(c.params.PurificationThreshold)
 }
 
 func (c *CFR) Run(node GameTreeNode) float32 {
@@ -54,13 +58,13 @@ func (c *CFR) Run(node GameTreeNode) float32 {
 }
 
 func (c *CFR) nextStrategyProfile() {
+	c.iter++
+	discountPos, discountNeg, discountSum := getDiscountFactors(c.params, c.iter)
 	for _, policies := range c.strategyProfile {
 		for _, p := range policies {
-			p.nextStrategy()
+			p.nextStrategy(discountPos, discountNeg, discountSum)
 		}
 	}
-
-	c.iter++
 }
 
 func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
@@ -183,4 +187,43 @@ func counterFactualProb(player int, reachP0, reachP1, reachChance float32) float
 	} else {
 		return reachP0 * reachChance
 	}
+}
+
+// Gets the discount factors as configured by the parameters for the
+// various CFR weighting schemes: CFR+, linear CFR, etc.
+func getDiscountFactors(params Params, iter int) (positive, negative, sum float32) {
+	positive = float32(1.0)
+	negative = float32(1.0)
+	sum = float32(1.0)
+
+	// See: https://arxiv.org/pdf/1809.04040.pdf
+	// Linear CFR is equivalent to weighting the reach prob on each
+	// iteration by (t / (t+1)), and this reduces numerical instability.
+	if params.LinearWeighting {
+		sum = float32(iter+1) / float32(iter+1)
+	}
+
+	if params.UseRegretMatchingPlus {
+		negative = 0.0 // No negative regrets.
+	}
+
+	if params.DiscountAlpha != 0 {
+		// t^alpha / (t^alpha + 1)
+		x := float32(math.Pow(float64(iter), float64(params.DiscountAlpha)))
+		positive = x / (x + 1.0)
+	}
+
+	if params.DiscountBeta != 0 {
+		// t^beta / (t^beta + 1)
+		x := float32(math.Pow(float64(iter), float64(params.DiscountBeta)))
+		negative = x / (x + 1.0)
+	}
+
+	if params.DiscountGamma != 0 {
+		// (t / (t+1)) ^ gamma
+		x := float64(iter) / float64(iter+1)
+		sum = float32(math.Pow(x, float64(params.DiscountGamma)))
+	}
+
+	return
 }

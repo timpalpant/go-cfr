@@ -24,8 +24,29 @@ func (p *policy) numActions() int {
 	return len(p.strategy)
 }
 
-func (p *policy) nextStrategy() {
+func (p *policy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
+	if discountStrategySum != 1.0 {
+		f32.ScalUnitary(discountStrategySum, p.strategySum)
+	}
+
 	f32.AxpyUnitary(p.reachProb, p.strategy, p.strategySum)
+
+	if discountPositiveRegret != 1.0 {
+		for i, x := range p.regretSum {
+			if x > 0 {
+				p.regretSum[i] *= discountPositiveRegret
+			}
+		}
+	}
+
+	if discountNegativeRegret != 1.0 {
+		for i, x := range p.regretSum {
+			if x < 0 {
+				p.regretSum[i] *= discountNegativeRegret
+			}
+		}
+	}
+
 	p.calcStrategy()
 	p.reachProb = 0.0
 }
@@ -44,11 +65,17 @@ func (p *policy) calcStrategy() {
 	}
 }
 
-func (p *policy) getAverageStrategy() []float32 {
+func (p *policy) getAverageStrategy(purificationThreshold float32) []float32 {
 	total := f32.Sum(p.strategySum)
 	if total > 0 {
 		avgStrat := make([]float32, len(p.strategySum))
 		f32.ScalUnitaryTo(avgStrat, 1.0/total, p.strategySum)
+		if purificationThreshold > 0 {
+			// https://www.cs.cmu.edu/~sandholm/StrategyPurification_AAMAS2012_camera_ready_2.pdf
+			purify(avgStrat, purificationThreshold)
+			normalize(avgStrat)
+		}
+
 		return avgStrat
 	}
 
@@ -87,4 +114,9 @@ func purify(v []float32, tol float32) {
 			v[i] = 0.0
 		}
 	}
+}
+
+func normalize(v []float32) {
+	total := f32.Sum(v)
+	f32.ScalUnitary(1.0/total, v)
 }

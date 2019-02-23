@@ -10,6 +10,7 @@ import (
 
 type cfrHeader struct {
 	Params     Params
+	Iter       int
 	NumPlayers int
 }
 
@@ -34,6 +35,7 @@ func Load(r io.Reader) (*CFR, error) {
 
 	glog.Infof("Loading policies for %d players", hdr.NumPlayers)
 	strategyProfile := make(map[int]map[string]*policy)
+	discountPos, discountNeg, discountSum := getDiscountFactors(hdr.Params, hdr.Iter)
 	for player := 0; player < hdr.NumPlayers; player++ {
 		playerHdr := playerHeader{}
 		if err := dec.Decode(&playerHdr); err != nil {
@@ -54,7 +56,7 @@ func Load(r io.Reader) (*CFR, error) {
 				strategySum: s.StrategySum,
 			}
 
-			p.nextStrategy()
+			p.nextStrategy(discountPos, discountNeg, discountSum)
 			policyMap[s.InfoSet] = p
 		}
 
@@ -64,6 +66,7 @@ func Load(r io.Reader) (*CFR, error) {
 
 	return &CFR{
 		params:          hdr.Params,
+		iter:            hdr.Iter,
 		strategyProfile: strategyProfile,
 		slicePool:       &floatSlicePool{},
 	}, nil
@@ -75,6 +78,7 @@ func (c *CFR) Save(w io.Writer) error {
 
 	hdr := cfrHeader{
 		Params:     c.params,
+		Iter:       c.iter,
 		NumPlayers: len(c.strategyProfile),
 	}
 

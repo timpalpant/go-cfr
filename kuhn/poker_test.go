@@ -31,62 +31,64 @@ func TestPoker_InfoSets(t *testing.T) {
 }
 
 func TestPoker_VanillaCFR(t *testing.T) {
-	root := NewGame()
-	vanillaCFR := cfr.New(cfr.Params{})
-	var expectedValue float32
-	nIter := 10000
-	for i := 1; i <= nIter; i++ {
-		expectedValue += vanillaCFR.Run(root)
-		if i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
-		}
-	}
-
-	tree.VisitInfoSets(root, func(player int, infoSet string) {
-		strat := vanillaCFR.GetStrategy(player, infoSet)
-		if strat != nil {
-			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
-		}
-	})
+	testCFR(t, cfr.Params{}, 10000)
 }
 
 func TestPoker_ChanceSamplingCFR(t *testing.T) {
-	root := NewGame()
-	csCFR := cfr.New(cfr.Params{SampleChanceNodes: true})
-	var expectedValue float32
-	nIter := 100000
-	for i := 1; i <= nIter; i++ {
-		expectedValue += csCFR.Run(root)
-		if i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
-		}
-	}
-
-	tree.VisitInfoSets(root, func(player int, infoSet string) {
-		strat := csCFR.GetStrategy(player, infoSet)
-		if strat != nil {
-			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
-		}
-	})
+	testCFR(t, cfr.Params{
+		SampleChanceNodes: true,
+	}, 100000)
 }
 
 func TestPoker_ExternalSamplingCFR(t *testing.T) {
-	root := NewGame()
-	esCFR := cfr.New(cfr.Params{
+	testCFR(t, cfr.Params{
 		SampleChanceNodes:     true,
 		SampleOpponentActions: true,
-	})
+	}, 100000)
+}
+
+func TestPoker_CFRPlus(t *testing.T) {
+	testCFR(t, cfr.Params{
+		SampleChanceNodes:     true,
+		SampleOpponentActions: true,
+		UseRegretMatchingPlus: true,
+	}, 100000)
+}
+
+func TestPoker_LinearCFR(t *testing.T) {
+	testCFR(t, cfr.Params{
+		SampleChanceNodes:     true,
+		SampleOpponentActions: true,
+		LinearWeighting:       true,
+	}, 100000)
+}
+
+func TestPoker_DiscountedCFR(t *testing.T) {
+	testCFR(t, cfr.Params{
+		SampleChanceNodes:     true,
+		SampleOpponentActions: true,
+		// From https://arxiv.org/pdf/1809.04040.pdf
+		//   we found that setting α=3/2, β=0, and γ=2
+		//   led to performance that was consistently stronger than CFR+
+		DiscountAlpha: 1.5,
+		DiscountBeta:  0.0,
+		DiscountGamma: 2.0,
+	}, 100000)
+}
+
+func testCFR(t *testing.T, params cfr.Params, nIter int) {
+	root := NewGame()
+	cfr := cfr.New(params)
 	var expectedValue float32
-	nIter := 100000
 	for i := 1; i <= nIter; i++ {
-		expectedValue += esCFR.Run(root)
+		expectedValue += cfr.Run(root)
 		if i%(nIter/10) == 0 {
 			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
 		}
 	}
 
 	tree.VisitInfoSets(root, func(player int, infoSet string) {
-		strat := esCFR.GetStrategy(player, infoSet)
+		strat := cfr.GetStrategy(player, infoSet)
 		if strat != nil {
 			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
 		}
