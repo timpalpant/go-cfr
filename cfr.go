@@ -55,13 +55,14 @@ func (c *CFR) GetStrategy(player int, infoSet string) []float32 {
 }
 
 func (c *CFR) Run(node GameTreeNode) float32 {
-	expectedValue := c.runHelper(node, 1.0, 1.0, 1.0)
+	expectedValue := c.runHelper(node, node.Player(), 1.0, 1.0, 1.0)
 	c.nextStrategyProfile()
 	return expectedValue
 }
 
 func (c *CFR) nextStrategyProfile() {
 	discountPos, discountNeg, discountSum := getDiscountFactors(c.params, c.iter+1)
+	glog.V(1).Infof("Updating %d policies", len(c.needsUpdate))
 	for _, p := range c.needsUpdate {
 		p.nextStrategy(discountPos, discountNeg, discountSum)
 	}
@@ -70,46 +71,48 @@ func (c *CFR) nextStrategyProfile() {
 	c.iter++
 }
 
-func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
+func (c *CFR) runHelper(node GameTreeNode, lastPlayer int, reachP0, reachP1, reachChance float32) float32 {
 	node.BuildChildren()
 
 	var ev float32
 	switch node.Type() {
 	case TerminalNode:
-		ev = node.Utility(node.Player())
+		ev = node.Utility(lastPlayer)
 	case ChanceNode:
-		ev = c.handleChanceNode(node, reachP0, reachP1, reachChance)
+		ev = c.handleChanceNode(node, lastPlayer, reachP0, reachP1, reachChance)
 	default:
-		ev = c.handlePlayerNode(node, reachP0, reachP1, reachChance)
+		sgn := getSign(lastPlayer, node)
+		ev = sgn * c.handlePlayerNode(node, reachP0, reachP1, reachChance)
 	}
 
 	node.FreeChildren()
 	return ev
 }
 
-func (c *CFR) handleChanceNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
+func (c *CFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reachP1, reachChance float32) float32 {
 	if c.params.SampleChanceNodes {
 		child := node.SampleChild()
-		return c.runHelper(child, reachP0, reachP1, reachChance)
+		return c.runHelper(child, lastPlayer, reachP0, reachP1, reachChance)
 	}
 
 	var expectedValue float32
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
 		p := node.GetChildProbability(i)
-		expectedValue += c.runHelper(child, reachP0, reachP1, reachChance*p)
+		expectedValue += c.runHelper(child, lastPlayer, reachP0, reachP1, reachChance*p)
 	}
 
 	return expectedValue / float32(node.NumChildren())
 }
 
 func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
+	player := node.Player()
+
 	if node.NumChildren() == 1 { // Fast path for trivial nodes with no real choice.
 		child := node.GetChild(0)
-		return -1 * c.runHelper(child, reachP0, reachP1, reachChance)
+		return c.runHelper(child, player, reachP0, reachP1, reachChance)
 	}
 
-	player := node.Player()
 	policy := c.getPolicy(node)
 	if c.params.SampleOpponentActions && c.traversingPlayer() != player {
 		// Sample according to current strategy profile.
@@ -117,9 +120,9 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 		child := node.GetChild(i)
 		p := policy.strategy[i]
 		if player == 0 {
-			return -1 * c.runHelper(child, p*reachP0, reachP1, reachChance)
+			return c.runHelper(child, player, p*reachP0, reachP1, reachChance)
 		} else {
-			return -1 * c.runHelper(child, reachP0, p*reachP1, reachChance)
+			return c.runHelper(child, player, reachP0, p*reachP1, reachChance)
 		}
 	}
 
@@ -128,9 +131,9 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 		child := node.GetChild(i)
 		p := policy.strategy[i]
 		if player == 0 {
-			actionUtils[i] = -1 * c.runHelper(child, p*reachP0, reachP1, reachChance)
+			actionUtils[i] = c.runHelper(child, player, p*reachP0, reachP1, reachChance)
 		} else {
-			actionUtils[i] = -1 * c.runHelper(child, reachP0, p*reachP1, reachChance)
+			actionUtils[i] = c.runHelper(child, player, reachP0, p*reachP1, reachChance)
 		}
 	}
 
@@ -140,6 +143,14 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	c.needsUpdate = append(c.needsUpdate, policy)
 	c.slicePool.free(actionUtils)
 	return cfUtility
+}
+
+func getSign(lastPlayer int, child GameTreeNode) float32 {
+	if child.Type() == PlayerNode || child.Player() != lastPlayer {
+		return -1.0
+	}
+
+	return 1.0
 }
 
 func sampleDist(probDist []float32) int {
