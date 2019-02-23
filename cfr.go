@@ -28,6 +28,7 @@ type CFR struct {
 
 	// Map of player -> InfoSet -> Strategy for that InfoSet.
 	strategyProfile map[int]map[string]*policy
+	needsUpdate     []*policy
 	slicePool       *floatSlicePool
 }
 
@@ -58,13 +59,13 @@ func (c *CFR) Run(node GameTreeNode) float32 {
 }
 
 func (c *CFR) nextStrategyProfile() {
-	c.iter++
-	discountPos, discountNeg, discountSum := getDiscountFactors(c.params, c.iter)
-	for _, policies := range c.strategyProfile {
-		for _, p := range policies {
-			p.nextStrategy(discountPos, discountNeg, discountSum)
-		}
+	discountPos, discountNeg, discountSum := getDiscountFactors(c.params, c.iter+1)
+	for _, p := range c.needsUpdate {
+		p.nextStrategy(discountPos, discountNeg, discountSum)
 	}
+
+	c.needsUpdate = c.needsUpdate[:0]
+	c.iter++
 }
 
 func (c *CFR) runHelper(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
@@ -108,7 +109,7 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 
 	player := node.Player()
 	policy := c.getPolicy(node)
-	if c.params.SampleOpponentActions && c.iter%2 != player {
+	if c.params.SampleOpponentActions && c.traversingPlayer() != player {
 		// Sample according to current strategy profile.
 		i := sampleDist(policy.strategy)
 		child := node.GetChild(i)
@@ -134,6 +135,7 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	reachP := reachProb(player, reachP0, reachP1, reachChance)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
 	cfUtility := policy.update(actionUtils, reachP, counterFactualP)
+	c.needsUpdate = append(c.needsUpdate, policy)
 	c.slicePool.free(actionUtils)
 	return cfUtility
 }
@@ -149,6 +151,10 @@ func sampleDist(probDist []float32) int {
 	}
 
 	panic("unreachable code")
+}
+
+func (c *CFR) traversingPlayer() int {
+	return c.iter % 2
 }
 
 func (c *CFR) getPolicy(node GameTreeNode) *policy {
