@@ -1,7 +1,6 @@
 package cfr
 
 import (
-	"fmt"
 	"math"
 	"math/rand"
 
@@ -10,6 +9,9 @@ import (
 
 const eps = 1e-3
 
+// Params are the configuration options for CFR sampling
+// and regret matching. An empty Params struct is valid and
+// corresponds to "vanilla" CFR.
 type Params struct {
 	SampleChanceNodes     bool    // Chance Sampling
 	SamplePlayerActions   bool    // Outcome Sampling
@@ -19,40 +21,38 @@ type Params struct {
 	DiscountAlpha         float32 // Discounted CFR
 	DiscountBeta          float32 // Discounted CFR
 	DiscountGamma         float32 // Discounted CFR
-	// Strategy probabilities below this value will be set to zero.
-	PurificationThreshold float32
+	// PolicyStore, if provided, can be used to implement a custom
+	// model that receives instantaneous regrets and predicts the current strategy.
+	// (for example: Deep CFR). If not provided, the default tabular policy
+	// store (as in most CFR) will be used, which looks up policies based
+	// on the current InfoSet's key.
+	PolicyStore PolicyStore
 }
 
 type CFR struct {
-	params Params
-
-	iter int
-
-	// Map of player -> InfoSet -> Strategy for that InfoSet.
-	strategyProfile map[int]map[string]*policy
-	needsUpdate     []*policy
-	slicePool       *floatSlicePool
+	params      Params
+	policyStore PolicyStore
+	iter        int
+	visited     []NodePolicy
+	slicePool   *floatSlicePool
 }
 
 func New(params Params) *CFR {
+	store := params.PolicyStore
+	if store == nil {
+		store = newPolicyStore()
+	}
+
 	return &CFR{
-		params: params,
-		iter:   1,
-		strategyProfile: map[int]map[string]*policy{
-			0: make(map[string]*policy),
-			1: make(map[string]*policy),
-		},
-		slicePool: &floatSlicePool{},
+		params:      params,
+		policyStore: store,
+		iter:        1,
+		slicePool:   &floatSlicePool{},
 	}
 }
 
-func (c *CFR) GetStrategy(player int, infoSet string) []float32 {
-	policy := c.strategyProfile[player][infoSet]
-	if policy == nil {
-		return nil
-	}
-
-	return policy.getAverageStrategy(c.params.PurificationThreshold)
+func (c *CFR) GetPolicyStore() PolicyStore {
+	return c.policyStore
 }
 
 func (c *CFR) Run(node GameTreeNode) float32 {
@@ -63,12 +63,12 @@ func (c *CFR) Run(node GameTreeNode) float32 {
 
 func (c *CFR) nextStrategyProfile() {
 	discountPos, discountNeg, discountSum := getDiscountFactors(c.params, c.iter)
-	glog.V(1).Infof("Updating %d policies", len(c.needsUpdate))
-	for _, p := range c.needsUpdate {
-		p.nextStrategy(discountPos, discountNeg, discountSum)
+	glog.V(1).Infof("Updating %d policies", len(c.visited))
+	for _, p := range c.visited {
+		p.NextStrategy(discountPos, discountNeg, discountSum)
 	}
 
-	c.needsUpdate = c.needsUpdate[:0]
+	c.visited = c.visited[:0]
 	c.iter++
 }
 
@@ -114,12 +114,12 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 		return c.runHelper(child, player, reachP0, reachP1, reachChance)
 	}
 
-	policy := c.getPolicy(node)
+	policy := c.policyStore.GetPolicy(node)
 	if c.params.SampleOpponentActions && c.traversingPlayer() != player {
 		// Sample according to current strategy profile.
-		i := sampleDist(policy.strategy)
+		i := sampleOne(policy, node.NumChildren())
 		child := node.GetChild(i)
-		p := policy.strategy[i]
+		p := policy.GetActionProbability(i)
 		if player == 0 {
 			return c.runHelper(child, player, p*reachP0, reachP1, reachChance)
 		} else {
@@ -128,22 +128,33 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	}
 
 	actionUtils := c.slicePool.alloc(node.NumChildren())
+	var expectedUtil float32
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
-		p := policy.strategy[i]
+		p := policy.GetActionProbability(i)
+		var util float32
 		if player == 0 {
-			actionUtils[i] = c.runHelper(child, player, p*reachP0, reachP1, reachChance)
+			util = c.runHelper(child, player, p*reachP0, reachP1, reachChance)
 		} else {
-			actionUtils[i] = c.runHelper(child, player, reachP0, p*reachP1, reachChance)
+			util = c.runHelper(child, player, reachP0, p*reachP1, reachChance)
 		}
+
+		actionUtils[i] = util
+		expectedUtil += p * util
 	}
 
 	reachP := reachProb(player, reachP0, reachP1, reachChance)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
-	cfUtility := policy.update(actionUtils, reachP, counterFactualP)
-	c.needsUpdate = append(c.needsUpdate, policy)
+	instantaneousRegrets := c.slicePool.alloc(node.NumChildren())
+	for i, util := range actionUtils {
+		instantaneousRegrets[i] = counterFactualP * (util - expectedUtil)
+	}
+
+	policy.AddRegret(reachP, instantaneousRegrets)
+	c.visited = append(c.visited, policy)
 	c.slicePool.free(actionUtils)
-	return cfUtility
+	c.slicePool.free(instantaneousRegrets)
+	return expectedUtil
 }
 
 func getSign(lastPlayer int, child GameTreeNode) float32 {
@@ -154,11 +165,11 @@ func getSign(lastPlayer int, child GameTreeNode) float32 {
 	return 1.0
 }
 
-func sampleDist(probDist []float32) int {
+func sampleOne(policy NodePolicy, numActions int) int {
 	x := rand.Float32()
 	var cumProb float32
-	for i, p := range probDist {
-		cumProb += p
+	for i := 0; i < numActions; i++ {
+		cumProb += policy.GetActionProbability(i)
 		if cumProb > x {
 			return i
 		}
@@ -168,31 +179,11 @@ func sampleDist(probDist []float32) int {
 		panic("probability distribution does not sum to 1!")
 	}
 
-	return len(probDist) - 1
+	return numActions - 1
 }
 
 func (c *CFR) traversingPlayer() int {
 	return c.iter % 2
-}
-
-func (c *CFR) getPolicy(node GameTreeNode) *policy {
-	p := node.Player()
-	is := node.InfoSet(p)
-
-	if policy, ok := c.strategyProfile[p][is]; ok {
-		if policy.numActions() != node.NumChildren() {
-			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v",
-				policy.numActions(), node.NumChildren(), node))
-		}
-		return policy
-	}
-
-	policy := newPolicy(node.NumChildren())
-	c.strategyProfile[p][is] = policy
-	if len(c.strategyProfile[p])%100000 == 0 {
-		glog.V(2).Infof("Player %d - %d infosets", p, len(c.strategyProfile[p]))
-	}
-	return policy
 }
 
 func reachProb(player int, reachP0, reachP1, reachChance float32) float32 {

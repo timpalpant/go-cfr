@@ -1,8 +1,47 @@
 package cfr
 
 import (
+	"fmt"
+
+	"github.com/golang/glog"
+
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
+
+type policyStore struct {
+	strategyProfile map[int]map[string]*policy
+}
+
+func newPolicyStore() *policyStore {
+	return &policyStore{
+		strategyProfile: map[int]map[string]*policy{
+			0: make(map[string]*policy),
+			1: make(map[string]*policy),
+		},
+	}
+}
+
+func (ps *policyStore) GetPolicy(node GameTreeNode) NodePolicy {
+	p := node.Player()
+	is := node.InfoSet(p)
+	key := is.Key()
+
+	if policy, ok := ps.strategyProfile[p][key]; ok {
+		if policy.numActions() != node.NumChildren() {
+			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v",
+				policy.numActions(), node.NumChildren(), node))
+		}
+		return policy
+	}
+
+	policy := newPolicy(node.NumChildren())
+	ps.strategyProfile[p][key] = policy
+	if len(ps.strategyProfile[p])%100000 == 0 {
+		glog.V(2).Infof("Player %d - %d infosets", p, len(ps.strategyProfile[p]))
+	}
+
+	return policy
+}
 
 type policy struct {
 	reachProb   float32
@@ -20,11 +59,11 @@ func newPolicy(nActions int) *policy {
 	}
 }
 
-func (p *policy) numActions() int {
-	return len(p.strategy)
+func (p *policy) GetActionProbability(i int) float32 {
+	return p.strategy[i]
 }
 
-func (p *policy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
+func (p *policy) NextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
 	if discountStrategySum != 1.0 {
 		f32.ScalUnitary(discountStrategySum, p.strategySum)
 	}
@@ -51,6 +90,10 @@ func (p *policy) nextStrategy(discountPositiveRegret, discountNegativeRegret, di
 	p.reachProb = 0.0
 }
 
+func (p *policy) numActions() int {
+	return len(p.strategy)
+}
+
 func (p *policy) calcStrategy() {
 	copy(p.strategy, p.regretSum)
 	makePositive(p.strategy)
@@ -65,32 +108,20 @@ func (p *policy) calcStrategy() {
 	}
 }
 
-func (p *policy) getAverageStrategy(purificationThreshold float32) []float32 {
+func (p *policy) GetAverageStrategy() []float32 {
 	total := f32.Sum(p.strategySum)
 	if total > 0 {
 		avgStrat := make([]float32, len(p.strategySum))
 		f32.ScalUnitaryTo(avgStrat, 1.0/total, p.strategySum)
-		if purificationThreshold > 0 {
-			// https://www.cs.cmu.edu/~sandholm/StrategyPurification_AAMAS2012_camera_ready_2.pdf
-			purify(avgStrat, purificationThreshold)
-			normalize(avgStrat)
-		}
-
 		return avgStrat
 	}
 
 	return uniformDist(len(p.strategy))
 }
 
-func (p *policy) update(actionUtils []float32, reachProb, counterFactualProb float32) float32 {
+func (p *policy) AddRegret(reachProb float32, instantaneousRegrets []float32) {
 	p.reachProb += reachProb
-	util := f32.DotUnitary(actionUtils, p.strategy)
-	for i := range actionUtils {
-		regret := actionUtils[i] - util
-		p.regretSum[i] += counterFactualProb * regret
-	}
-
-	return util
+	f32.Add(p.regretSum, instantaneousRegrets)
 }
 
 func uniformDist(n int) []float32 {
@@ -106,17 +137,4 @@ func makePositive(v []float32) {
 			v[i] = 0.0
 		}
 	}
-}
-
-func purify(v []float32, tol float32) {
-	for i := range v {
-		if v[i] < tol {
-			v[i] = 0.0
-		}
-	}
-}
-
-func normalize(v []float32) {
-	total := f32.Sum(v)
-	f32.ScalUnitary(1.0/total, v)
 }

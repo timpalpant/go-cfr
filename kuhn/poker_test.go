@@ -1,7 +1,6 @@
 package kuhn
 
 import (
-	"bytes"
 	"testing"
 
 	"github.com/timpalpant/go-cfr"
@@ -78,19 +77,34 @@ func TestPoker_DiscountedCFR(t *testing.T) {
 
 func testCFR(t *testing.T, params cfr.Params, nIter int) {
 	root := NewGame()
-	cfr := cfr.New(params)
+	opt := cfr.New(params)
 	var expectedValue float32
 	for i := 1; i <= nIter; i++ {
-		expectedValue += cfr.Run(root)
+		expectedValue += opt.Run(root)
 		if i%(nIter/10) == 0 {
 			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
 		}
 	}
 
-	tree.VisitInfoSets(root, func(player int, infoSet string) {
-		strat := cfr.GetStrategy(player, infoSet)
-		if strat != nil {
-			t.Logf("[player %d] %6s: check=%.2f bet=%.2f", player, infoSet, strat[0], strat[1])
+	seen := make(map[cfr.NodePolicy]struct{})
+	store := opt.GetPolicyStore()
+	tree.Visit(root, func(node cfr.GameTreeNode) {
+		if node.Type() != cfr.PlayerNode {
+			return
 		}
+
+		node.BuildChildren()
+		defer node.FreeChildren()
+		policy := store.GetPolicy(node)
+		if _, ok := seen[policy]; ok {
+			return
+		}
+
+		strat := policy.GetAverageStrategy()
+		if strat != nil {
+			t.Logf("%6s: check=%.2f bet=%.2f", node, strat[0], strat[1])
+		}
+
+		seen[policy] = struct{}{}
 	})
 }

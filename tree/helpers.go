@@ -14,18 +14,19 @@ func Visit(root cfr.GameTreeNode, visitor func(node cfr.GameTreeNode)) {
 	root.FreeChildren()
 }
 
-func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet string)) {
+func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet cfr.InfoSet)) {
 	seen := make(map[string]struct{})
 	Visit(root, func(node cfr.GameTreeNode) {
 		if node.Type() == cfr.PlayerNode {
 			player := node.Player()
 			infoSet := node.InfoSet(player)
-			if _, ok := seen[infoSet]; ok {
+			key := infoSet.Key()
+			if _, ok := seen[key]; ok {
 				return
 			}
 
 			visitor(player, infoSet)
-			seen[infoSet] = struct{}{}
+			seen[key] = struct{}{}
 		}
 	})
 }
@@ -49,6 +50,6 @@ func CountNodes(root cfr.GameTreeNode) int {
 
 func CountInfoSets(root cfr.GameTreeNode) int {
 	total := 0
-	VisitInfoSets(root, func(player int, infoSet string) { total++ })
+	VisitInfoSets(root, func(player int, infoSet cfr.InfoSet) { total++ })
 	return total
 }

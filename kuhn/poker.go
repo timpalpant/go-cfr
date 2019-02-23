@@ -58,7 +58,7 @@ func NewGame() *PokerNode {
 
 // String implements fmt.Stringer.
 func (k PokerNode) String() string {
-	return fmt.Sprintf("Player %v's turn. History: %s [Cards: P0 - %s, P1 - %s]",
+	return fmt.Sprintf("Player %v's turn. History: %5s [Cards: P0 - %s, P1 - %s]",
 		k.player, k.history, k.p0Card, k.p1Card)
 }
 
@@ -164,9 +164,15 @@ func (k *PokerNode) Utility(player int) float32 {
 	return -2.0
 }
 
+type pokerInfoSet string
+
+func (p pokerInfoSet) Key() string {
+	return string(p)
+}
+
 // InfoSet implements cfr.GameTreeNode.
-func (k *PokerNode) InfoSet(player int) string {
-	return k.playerCard(player).String() + "-" + k.history
+func (k *PokerNode) InfoSet(player int) cfr.InfoSet {
+	return pokerInfoSet(k.playerCard(player).String() + "-" + k.history)
 }
 
 func (k *PokerNode) playerCard(player int) Card {
