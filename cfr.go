@@ -8,6 +8,8 @@ import (
 	"github.com/golang/glog"
 )
 
+const eps = 1e-3
+
 type Params struct {
 	SampleChanceNodes     bool    // Chance Sampling
 	SamplePlayerActions   bool    // Outcome Sampling
@@ -150,7 +152,11 @@ func sampleDist(probDist []float32) int {
 		}
 	}
 
-	panic("unreachable code")
+	if cumProb < 1.0-eps { // Leave room for floating point error.
+		panic("probability distribution does not sum to 1!")
+	}
+
+	return len(probDist) - 1
 }
 
 func (c *CFR) traversingPlayer() int {
