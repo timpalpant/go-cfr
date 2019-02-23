@@ -12,6 +12,7 @@ type Params struct {
 	SamplePlayerActions   bool // Outcome Sampling
 	SampleOpponentActions bool // External Sampling
 	UseRegretMatchingPlus bool // CFR+
+	LinearWeighting       bool // Linear CFR
 	// Strategy probabilities below this value will be set to zero.
 	PurificationThreshold float32
 }
@@ -105,21 +106,14 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	policy := c.getPolicy(node)
 	if c.params.SampleOpponentActions && c.iter%2 != player {
 		// Sample according to current strategy profile.
-		x := rand.Float32()
-		var cumProb float32
-		for i, p := range policy.strategy {
-			cumProb += p
-			if cumProb > x {
-				child := node.GetChild(i)
-				if player == 0 {
-					return -1 * c.runHelper(child, p*reachP0, reachP1, reachChance)
-				} else {
-					return -1 * c.runHelper(child, reachP0, p*reachP1, reachChance)
-				}
-			}
+		i := sampleDist(policy.strategy)
+		child := node.GetChild(i)
+		p := policy.strategy[i]
+		if player == 0 {
+			return -1 * c.runHelper(child, p*reachP0, reachP1, reachChance)
+		} else {
+			return -1 * c.runHelper(child, reachP0, p*reachP1, reachChance)
 		}
-
-		panic("unreachable code")
 	}
 
 	actionUtils := c.slicePool.alloc(node.NumChildren())
@@ -138,6 +132,19 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	cfUtility := policy.update(actionUtils, reachP, counterFactualP)
 	c.slicePool.free(actionUtils)
 	return cfUtility
+}
+
+func sampleDist(probDist []float32) int {
+	x := rand.Float32()
+	var cumProb float32
+	for i, p := range probDist {
+		cumProb += p
+		if cumProb > x {
+			return i
+		}
+	}
+
+	panic("unreachable code")
 }
 
 func (c *CFR) getPolicy(node GameTreeNode) *policy {
