@@ -8,121 +8,135 @@ import (
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
-type policyStore struct {
-	// Map of player -> InfoSet Key -> policy for that infoset.
-	strategyProfile map[int]map[string]*policy
+// StrategyTable implements traditional CFR by storing accumulated
+// regrets and strategy sums for each InfoSet, which is looked up by its Key().
+type StrategyTable struct {
+	params Params
+	iter   int
+
+	// Map of InfoSet Key -> strategy for that infoset.
+	strategies  map[string]*strategy
+	needsUpdate []*strategy
 }
 
-func newPolicyStore() *policyStore {
-	return &policyStore{
-		strategyProfile: map[int]map[string]*policy{
-			0: make(map[string]*policy),
-			1: make(map[string]*policy),
-		},
+func NewStrategyTable(params Params) *StrategyTable {
+	return &StrategyTable{
+		params:     params,
+		iter:       1,
+		strategies: make(map[string]*strategy),
 	}
 }
 
-func (ps *policyStore) GetPolicy(node GameTreeNode) NodePolicy {
+func (st *StrategyTable) Update() {
+	glog.V(1).Infof("Updating %d policies", len(st.needsUpdate))
+	discountPos, discountNeg, discountSum := st.params.GetDiscountFactors(st.iter)
+	for _, p := range st.needsUpdate {
+		p.nextStrategy(discountPos, discountNeg, discountSum)
+	}
+
+	st.needsUpdate = st.needsUpdate[:0]
+	st.iter++
+}
+
+func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 	p := node.Player()
 	is := node.InfoSet(p)
 	key := is.Key()
 
-	if policy, ok := ps.strategyProfile[p][key]; ok {
-		if policy.numActions() != node.NumChildren() {
-			panic(fmt.Errorf("policy has n_actions=%v but node has n_children=%v: %v",
-				policy.numActions(), node.NumChildren(), node))
-		}
-		return policy
+	s, ok := st.strategies[key]
+	if !ok {
+		s = newStrategy(node.NumChildren())
+		st.strategies[key] = s
 	}
 
-	policy := newPolicy(node.NumChildren())
-	ps.strategyProfile[p][key] = policy
-	if len(ps.strategyProfile[p])%100000 == 0 {
-		glog.V(2).Infof("Player %d - %d infosets", p, len(ps.strategyProfile[p]))
+	if s.numActions() != node.NumChildren() {
+		panic(fmt.Errorf("strategy has n_actions=%v but node has n_children=%v: %v",
+			s.numActions(), node.NumChildren(), node))
 	}
 
-	return policy
+	st.needsUpdate = append(st.needsUpdate, s)
+	return s
 }
 
-type policy struct {
+type strategy struct {
 	reachProb   float32
 	regretSum   []float32
-	strategy    []float32
+	current     []float32
 	strategySum []float32
 }
 
-func newPolicy(nActions int) *policy {
-	return &policy{
+func newStrategy(nActions int) *strategy {
+	return &strategy{
 		reachProb:   0.0,
 		regretSum:   make([]float32, nActions),
-		strategy:    uniformDist(nActions),
+		current:     uniformDist(nActions),
 		strategySum: make([]float32, nActions),
 	}
 }
 
-func (p *policy) GetActionProbability(i int) float32 {
-	return p.strategy[i]
+func (s *strategy) GetActionProbability(i int) float32 {
+	return s.current[i]
 }
 
-func (p *policy) NextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
+func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
 	if discountStrategySum != 1.0 {
-		f32.ScalUnitary(discountStrategySum, p.strategySum)
+		f32.ScalUnitary(discountStrategySum, s.strategySum)
 	}
 
-	f32.AxpyUnitary(p.reachProb, p.strategy, p.strategySum)
+	f32.AxpyUnitary(s.reachProb, s.current, s.strategySum)
 
 	if discountPositiveRegret != 1.0 {
-		for i, x := range p.regretSum {
+		for i, x := range s.regretSum {
 			if x > 0 {
-				p.regretSum[i] *= discountPositiveRegret
+				s.regretSum[i] *= discountPositiveRegret
 			}
 		}
 	}
 
 	if discountNegativeRegret != 1.0 {
-		for i, x := range p.regretSum {
+		for i, x := range s.regretSum {
 			if x < 0 {
-				p.regretSum[i] *= discountNegativeRegret
+				s.regretSum[i] *= discountNegativeRegret
 			}
 		}
 	}
 
-	p.calcStrategy()
-	p.reachProb = 0.0
+	s.calcStrategy()
+	s.reachProb = 0.0
 }
 
-func (p *policy) numActions() int {
-	return len(p.strategy)
+func (s *strategy) numActions() int {
+	return len(s.current)
 }
 
-func (p *policy) calcStrategy() {
-	copy(p.strategy, p.regretSum)
-	makePositive(p.strategy)
-	total := f32.Sum(p.strategy)
+func (s *strategy) calcStrategy() {
+	copy(s.current, s.regretSum)
+	makePositive(s.current)
+	total := f32.Sum(s.current)
 	if total > 0 {
-		f32.ScalUnitary(1.0/total, p.strategy)
+		f32.ScalUnitary(1.0/total, s.current)
 		return
 	}
 
-	for i := range p.strategy {
-		p.strategy[i] = 1.0 / float32(len(p.strategy))
+	for i := range s.current {
+		s.current[i] = 1.0 / float32(len(s.current))
 	}
 }
 
-func (p *policy) GetAverageStrategy() []float32 {
-	total := f32.Sum(p.strategySum)
+func (s *strategy) GetAverageStrategy() []float32 {
+	total := f32.Sum(s.strategySum)
 	if total > 0 {
-		avgStrat := make([]float32, len(p.strategySum))
-		f32.ScalUnitaryTo(avgStrat, 1.0/total, p.strategySum)
+		avgStrat := make([]float32, len(s.strategySum))
+		f32.ScalUnitaryTo(avgStrat, 1.0/total, s.strategySum)
 		return avgStrat
 	}
 
-	return uniformDist(len(p.strategy))
+	return uniformDist(len(s.current))
 }
 
-func (p *policy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
-	p.reachProb += reachProb
-	f32.AxpyUnitary(counterFactualProb, instantaneousRegrets, p.regretSum)
+func (s *strategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
+	s.reachProb += reachProb
+	f32.AxpyUnitary(counterFactualProb, instantaneousRegrets, s.regretSum)
 }
 
 func uniformDist(n int) []float32 {

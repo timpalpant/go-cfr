@@ -4,64 +4,94 @@ import (
 	"github.com/timpalpant/go-cfr"
 )
 
-type DeepCFR struct {
-	buf  *Buffer
-	iter int
+// Sample is a single sample of instantaneous advantages
+// collected for training.
+type Sample struct {
+	InfoSet    cfr.InfoSet
+	Advantages []float32
+	Iter       int
 }
 
-func New(maxSize int) *DeepCFR {
+// Buffer collects samples of infoset action advantages to train a Model.
+type Buffer interface {
+	AddSample(s Sample)
+	GetSamples() []Sample
+}
+
+// Model is a regression model to use in DeepCFR that predicts
+// a vector of advantages for a given InfoSet.
+type Model interface {
+	Train(samples Buffer)
+	Predict(infoSet cfr.InfoSet, nActions int) (advantages []float32)
+}
+
+// DeepCFR implements cfr.PolicyStore, and uses function approximation
+// to estimate strategies rather than accumulation of regrets for all
+// infosets. This can be more tractable for large games where storing
+// all of the regrets for all infosets is impractical.
+//
+// During CFR iterations, samples are added to the given buffer.
+// When NextIter is called, the model is retrained.
+type DeepCFR struct {
+	model Model
+	buf   Buffer
+	iter  int
+}
+
+func New(model Model, buffer Buffer) *DeepCFR {
 	return &DeepCFR{
-		buf: NewBuffer(maxSize),
+		model: model,
+		buf:   buffer,
+		iter:  1,
 	}
 }
 
-// GetPolicy implements cfr.PolicyStore.
-func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
-	return &dCFRPolicy{
+// GetStrategy implements cfr.StrategyProfile.
+func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
+	infoSet := node.InfoSet(node.Player())
+	strategy := d.model.Predict(infoSet, node.NumChildren())
+	return dCFRPolicy{
+		strategy: strategy,
 		buf:      d.buf,
-		infoSet:  node.InfoSet(node.Player()),
-		nActions: node.NumChildren(),
+		infoSet:  infoSet,
 		iter:     d.iter,
 	}
 }
 
-func (d *DeepCFR) GetSamples() []Sample {
-	return d.buf.GetSamples()
-}
-
-func (d *DeepCFR) NextIter() {
+func (d *DeepCFR) Update() {
+	d.model.Train(d.buf)
 	d.iter++
 }
 
 type dCFRPolicy struct {
-	buf      *Buffer
+	strategy []float32
+	buf      Buffer
 	infoSet  cfr.InfoSet
-	nActions int
 	iter     int
 }
 
 // GetActionProbability implements cfr.Policy.
-func (p *dCFRPolicy) GetActionProbability(i int) float32 {
-	// TODO: Should use latest trained model.
-	return float32(i+1) / float32(p.nActions)
+func (p dCFRPolicy) GetActionProbability(i int) float32 {
+	return p.strategy[i]
 }
 
 // AddRegret implements cfr.Policy.
-func (p *dCFRPolicy) AddRegret(reachP, counterFactualP float32, advantages []float32) {
+func (p dCFRPolicy) AddRegret(reachP, counterFactualP float32, advantages []float32) {
 	p.buf.AddSample(Sample{
 		InfoSet:    p.infoSet,
-		Advantages: advantages,
+		Advantages: append([]float32(nil), advantages...),
 		Iter:       p.iter,
 	})
 }
 
 // NextStrategy implements cfr.Policy.
-func (p *dCFRPolicy) NextStrategy(discountPos, discountNeg, discountSum float32) {
-	// TODO: Should run model training.
+func (p dCFRPolicy) NextStrategy(discountPos, discountNeg, discountSum float32) {
+	// DeepCFR training must be performed out-of-band by calling NextIter().
 }
 
 // GetAverageStrategy implements cfr.Policy.
-func (p *dCFRPolicy) GetAverageStrategy() []float32 {
-	// TODO: Should average over all trained models.
+func (p dCFRPolicy) GetAverageStrategy() []float32 {
+	// TODO: Should average over all trained models like in Single Deep CFR:
+	// https://arxiv.org/pdf/1901.07621.pdf.
 	panic("not yet implemented")
 }
