@@ -9,13 +9,13 @@ import (
 const eps = 1e-3
 
 type CFR struct {
-	params          Params
+	params          SamplingParams
 	strategyProfile StrategyProfile
 	iter            int
 	slicePool       *floatSlicePool
 }
 
-func New(params Params, strategyProfile StrategyProfile) *CFR {
+func New(params SamplingParams, strategyProfile StrategyProfile) *CFR {
 	return &CFR{
 		params:          params,
 		strategyProfile: strategyProfile,

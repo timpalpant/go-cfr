@@ -31,54 +31,51 @@ func TestPoker_InfoSets(t *testing.T) {
 }
 
 func TestPoker_VanillaCFR(t *testing.T) {
-	testCFR(t, cfr.Params{}, 10000)
+	testCFR(t, cfr.SamplingParams{}, cfr.DiscountParams{}, 10000)
 }
 
 func TestPoker_ChanceSamplingCFR(t *testing.T) {
-	testCFR(t, cfr.Params{
-		SampleChanceNodes: true,
-	}, 100000)
+	testCFR(t, cfr.SamplingParams{SampleChanceNodes: true}, cfr.DiscountParams{}, 100000)
 }
 
 func TestPoker_ExternalSamplingCFR(t *testing.T) {
-	testCFR(t, cfr.Params{
+	es := cfr.SamplingParams{
 		SampleChanceNodes:     true,
 		SampleOpponentActions: true,
-	}, 100000)
+	}
+
+	testCFR(t, es, cfr.DiscountParams{}, 100000)
 }
 
 func TestPoker_CFRPlus(t *testing.T) {
-	testCFR(t, cfr.Params{
-		SampleChanceNodes:     true,
-		SampleOpponentActions: true,
-		UseRegretMatchingPlus: true,
-	}, 100000)
+	testCFR(t, cfr.SamplingParams{}, cfr.DiscountParams{UseRegretMatchingPlus: true}, 10000)
 }
 
 func TestPoker_LinearCFR(t *testing.T) {
-	testCFR(t, cfr.Params{
+	es := cfr.SamplingParams{
 		SampleChanceNodes:     true,
 		SampleOpponentActions: true,
-		LinearWeighting:       true,
-	}, 100000)
+	}
+	linear := cfr.DiscountParams{LinearWeighting: true}
+	testCFR(t, es, linear, 10000)
 }
 
 func TestPoker_DiscountedCFR(t *testing.T) {
-	testCFR(t, cfr.Params{
-		SampleChanceNodes:     true,
-		SampleOpponentActions: true,
+	abg := cfr.DiscountParams{
 		// From https://arxiv.org/pdf/1809.04040.pdf
 		//   we found that setting α=3/2, β=0, and γ=2
 		//   led to performance that was consistently stronger than CFR+
 		DiscountAlpha: 1.5,
 		DiscountBeta:  0.0,
 		DiscountGamma: 2.0,
-	}, 100000)
+	}
+
+	testCFR(t, cfr.SamplingParams{}, abg, 10000)
 }
 
-func testCFR(t *testing.T, params cfr.Params, nIter int) {
+func testCFR(t *testing.T, params cfr.SamplingParams, discounts cfr.DiscountParams, nIter int) {
 	root := NewGame()
-	policy := cfr.NewStrategyTable(params)
+	policy := cfr.NewStrategyTable(discounts)
 	opt := cfr.New(params, policy)
 	var expectedValue float32
 	for i := 1; i <= nIter; i++ {
@@ -128,10 +125,9 @@ func (m randomGuessModel) Predict(infoSet cfr.InfoSet, nActions int) []float32 {
 func TestPoker_DeepCFR(t *testing.T) {
 	buf := deepcfr.NewReservoirBuffer(10)
 	deepCFR := deepcfr.New(&randomGuessModel{}, buf)
-	params := cfr.Params{
+	params := cfr.SamplingParams{
 		SampleChanceNodes:     true,
 		SampleOpponentActions: true,
-		LinearWeighting:       true,
 	}
 
 	root := NewGame()

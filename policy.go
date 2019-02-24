@@ -11,7 +11,7 @@ import (
 // StrategyTable implements traditional CFR by storing accumulated
 // regrets and strategy sums for each InfoSet, which is looked up by its Key().
 type StrategyTable struct {
-	params Params
+	params DiscountParams
 	iter   int
 
 	// Map of InfoSet Key -> strategy for that infoset.
@@ -19,7 +19,7 @@ type StrategyTable struct {
 	needsUpdate []*strategy
 }
 
-func NewStrategyTable(params Params) *StrategyTable {
+func NewStrategyTable(params DiscountParams) *StrategyTable {
 	return &StrategyTable{
 		params:     params,
 		iter:       1,

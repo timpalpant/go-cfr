@@ -4,13 +4,19 @@ import (
 	"math"
 )
 
-// Params are the configuration options for CFR sampling
-// and regret matching. An empty Params struct is valid and
-// corresponds to "vanilla" CFR.
-type Params struct {
-	SampleChanceNodes     bool    // Chance Sampling
-	SamplePlayerActions   bool    // Outcome Sampling
-	SampleOpponentActions bool    // External Sampling
+// SamplingParams are the configuration options for CFR sampling.
+// An empty SamplingParams is valid and corresponds to "vanilla" CFR
+// (no sampling, full game tree traversals).
+type SamplingParams struct {
+	SampleChanceNodes     bool // Chance Sampling
+	SamplePlayerActions   bool // Outcome Sampling
+	SampleOpponentActions bool // External Sampling
+}
+
+// DiscountParams modify how regret is accumulated.
+// An empty DiscountParams is valid and corresponds to traditional
+// (MC)CFR without weighting.
+type DiscountParams struct {
 	UseRegretMatchingPlus bool    // CFR+
 	LinearWeighting       bool    // Linear CFR
 	DiscountAlpha         float32 // Discounted CFR
@@ -20,7 +26,7 @@ type Params struct {
 
 // Gets the discount factors as configured by the parameters for the
 // various CFR weighting schemes: CFR+, linear CFR, etc.
-func (p Params) GetDiscountFactors(iter int) (positive, negative, sum float32) {
+func (p DiscountParams) GetDiscountFactors(iter int) (positive, negative, sum float32) {
 	positive = float32(1.0)
 	negative = float32(1.0)
 	sum = float32(1.0)
