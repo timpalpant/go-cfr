@@ -145,15 +145,15 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 
 	reachP := reachProb(player, reachP0, reachP1, reachChance)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
-	instantaneousRegrets := c.slicePool.alloc(node.NumChildren())
+	instantaneousAdvantages := c.slicePool.alloc(node.NumChildren())
 	for i, util := range actionUtils {
-		instantaneousRegrets[i] = counterFactualP * (util - expectedUtil)
+		instantaneousAdvantages[i] = counterFactualP * (util - expectedUtil)
 	}
 
-	policy.AddRegret(reachP, instantaneousRegrets)
+	policy.AddRegret(reachP, instantaneousAdvantages)
 	c.visited = append(c.visited, policy)
 	c.slicePool.free(actionUtils)
-	c.slicePool.free(instantaneousRegrets)
+	c.slicePool.free(instantaneousAdvantages)
 	return expectedUtil
 }
 

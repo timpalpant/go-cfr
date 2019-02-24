@@ -63,7 +63,7 @@ type NodePolicy interface {
 	GetActionProbability(i int) float32
 	// AddRegret provides new observed instantaneous regrets (with probability p)
 	// to add to the total accumulated regret.
-	AddRegret(reachP float32, instantaneousRegrets []float32)
+	AddRegret(reachP float32, instantaneousAdvantages []float32)
 	// NextStrategy calculates new strategy action probabilities based on the
 	// accumulated regret.
 	//

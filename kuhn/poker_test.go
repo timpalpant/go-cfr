@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/timpalpant/go-cfr"
+	"github.com/timpalpant/go-cfr/deepcfr"
 	"github.com/timpalpant/go-cfr/tree"
 )
 
@@ -73,6 +74,31 @@ func TestPoker_DiscountedCFR(t *testing.T) {
 		DiscountBeta:  0.0,
 		DiscountGamma: 2.0,
 	}, 100000)
+}
+
+func TestPoker_DeepCFR(t *testing.T) {
+	buf := deepcfr.New(10)
+	params := cfr.Params{
+		SampleChanceNodes:     true,
+		SampleOpponentActions: true,
+		LinearWeighting:       true,
+		PolicyStore:           buf,
+	}
+
+	root := NewGame()
+	opt := cfr.New(params)
+	for i := 1; i <= 1000; i++ {
+		opt.Run(root)
+	}
+
+	buf.NextIter()
+	for i := 1; i <= 1000; i++ {
+		opt.Run(root)
+	}
+
+	for i, sample := range buf.GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
+	}
 }
 
 func testCFR(t *testing.T, params cfr.Params, nIter int) {
