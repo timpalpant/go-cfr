@@ -5,6 +5,8 @@ import (
 	"math/rand"
 
 	"github.com/golang/glog"
+
+	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
 const eps = 1e-3
@@ -127,7 +129,7 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 		}
 	}
 
-	actionUtils := c.slicePool.alloc(node.NumChildren())
+	advantages := c.slicePool.alloc(node.NumChildren())
 	var expectedUtil float32
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
@@ -139,21 +141,18 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 			util = c.runHelper(child, player, reachP0, p*reachP1, reachChance)
 		}
 
-		actionUtils[i] = util
+		advantages[i] = util
 		expectedUtil += p * util
 	}
 
+	// Transform action utilities into instantaneous advantages by
+	// subtracting out the expected utility over all possible actions.
+	f32.AddConst(-expectedUtil, advantages)
 	reachP := reachProb(player, reachP0, reachP1, reachChance)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
-	instantaneousAdvantages := c.slicePool.alloc(node.NumChildren())
-	for i, util := range actionUtils {
-		instantaneousAdvantages[i] = counterFactualP * (util - expectedUtil)
-	}
-
-	policy.AddRegret(reachP, instantaneousAdvantages)
+	policy.AddRegret(reachP, counterFactualP, advantages)
 	c.visited = append(c.visited, policy)
-	c.slicePool.free(actionUtils)
-	c.slicePool.free(instantaneousAdvantages)
+	c.slicePool.free(advantages) // Not using defer because it is slow.
 	return expectedUtil
 }
 

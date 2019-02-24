@@ -9,6 +9,7 @@ import (
 )
 
 type policyStore struct {
+	// Map of player -> InfoSet Key -> policy for that infoset.
 	strategyProfile map[int]map[string]*policy
 }
 
@@ -119,9 +120,9 @@ func (p *policy) GetAverageStrategy() []float32 {
 	return uniformDist(len(p.strategy))
 }
 
-func (p *policy) AddRegret(reachProb float32, instantaneousRegrets []float32) {
+func (p *policy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
 	p.reachProb += reachProb
-	f32.Add(p.regretSum, instantaneousRegrets)
+	f32.AxpyUnitary(counterFactualProb, instantaneousRegrets, p.regretSum)
 }
 
 func uniformDist(n int) []float32 {

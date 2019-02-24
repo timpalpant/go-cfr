@@ -42,23 +42,26 @@ type dCFRPolicy struct {
 
 // GetActionProbability implements cfr.Policy.
 func (p *dCFRPolicy) GetActionProbability(i int) float32 {
+	// TODO: Should use latest trained model.
 	return float32(i+1) / float32(p.nActions)
 }
 
 // AddRegret implements cfr.Policy.
-func (p *dCFRPolicy) AddRegret(reachProb float32, instantaneousAdvantages []float32) {
+func (p *dCFRPolicy) AddRegret(reachP, counterFactualP float32, advantages []float32) {
 	p.buf.AddSample(Sample{
 		InfoSet:    p.infoSet,
-		Advantages: instantaneousAdvantages,
+		Advantages: advantages,
 		Iter:       p.iter,
 	})
 }
 
 // NextStrategy implements cfr.Policy.
 func (p *dCFRPolicy) NextStrategy(discountPos, discountNeg, discountSum float32) {
+	// TODO: Should run model training.
 }
 
 // GetAverageStrategy implements cfr.Policy.
 func (p *dCFRPolicy) GetAverageStrategy() []float32 {
+	// TODO: Should average over all trained models.
 	panic("not yet implemented")
 }
