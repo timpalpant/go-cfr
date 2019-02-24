@@ -158,7 +158,7 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 }
 
 func getSign(lastPlayer int, child GameTreeNode) float32 {
-	if child.Type() == PlayerNode || child.Player() != lastPlayer {
+	if child.Type() == PlayerNode && child.Player() != lastPlayer {
 		return -1.0
 	}
 
