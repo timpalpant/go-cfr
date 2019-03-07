@@ -7,11 +7,11 @@ import (
 func Visit(root cfr.GameTreeNode, visitor func(node cfr.GameTreeNode)) {
 	visitor(root)
 
-	root.BuildChildren()
 	for i := 0; i < root.NumChildren(); i++ {
 		Visit(root.GetChild(i), visitor)
 	}
-	root.FreeChildren()
+
+	root.Close()
 }
 
 func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet cfr.InfoSet)) {

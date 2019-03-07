@@ -3,6 +3,8 @@ package cfr
 import (
 	"math/rand"
 
+	"github.com/golang/glog"
+
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
@@ -12,6 +14,7 @@ type CFR struct {
 	params          SamplingParams
 	strategyProfile StrategyProfile
 	iter            int
+	nVisited        int
 	slicePool       *floatSlicePool
 }
 
@@ -25,12 +28,11 @@ func New(params SamplingParams, strategyProfile StrategyProfile) *CFR {
 
 func (c *CFR) Run(node GameTreeNode) float32 {
 	c.iter++
+	c.nVisited = 0
 	return c.runHelper(node, node.Player(), 1.0, 1.0, 1.0)
 }
 
 func (c *CFR) runHelper(node GameTreeNode, lastPlayer int, reachP0, reachP1, reachChance float32) float32 {
-	node.BuildChildren()
-
 	var ev float32
 	switch node.Type() {
 	case TerminalNode:
@@ -42,7 +44,12 @@ func (c *CFR) runHelper(node GameTreeNode, lastPlayer int, reachP0, reachP1, rea
 		ev = sgn * c.handlePlayerNode(node, reachP0, reachP1, reachChance)
 	}
 
-	node.FreeChildren()
+	node.Close()
+	c.nVisited++
+	if c.nVisited%10000000 == 0 {
+		glog.V(2).Infof("Visited %d million nodes", c.nVisited/1000000)
+	}
+
 	return ev
 }
 

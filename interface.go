@@ -25,15 +25,8 @@ type GameTreeNode interface {
 	// NodeType returns the type of game node.
 	Type() NodeType
 
-	// Prepare children of this node.
-	// Must be called before using NumChildren, GetChild, or GetChildProbability.
-	// Implementations are free to ignore the request and generate children
-	// on the fly as needed if they choose.
-	BuildChildren()
-	// Release resources allocated by calling BuildChildren.
-	// After calling FreeChildren, NumChildren, GetChild, and GetChildProbability
-	// may no longer be called (unless the node is rebuilt).
-	FreeChildren()
+	// Release resources held by this node (including any children).
+	Close()
 
 	// The number of direct children of this node.
 	NumChildren() int

@@ -93,8 +93,6 @@ func testCFR(t *testing.T, params cfr.SamplingParams, discounts cfr.DiscountPara
 			return
 		}
 
-		node.BuildChildren()
-		defer node.FreeChildren()
 		strat := policy.GetStrategy(node)
 		if _, ok := seen[strat]; ok {
 			return

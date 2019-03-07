@@ -62,42 +62,36 @@ func (k PokerNode) String() string {
 		k.player, k.history, k.p0Card, k.p1Card)
 }
 
-// BuildChildren implements cfr.GameTreeNode.
-func (k *PokerNode) BuildChildren() {
-	switch len(k.history) {
-	case 0:
-		k.children = buildP0Deals()
-		k.probabilities = uniformDist(len(k.children))
-	case 1:
-		k.children = buildP1Deals(k)
-		k.probabilities = uniformDist(len(k.children))
-	case 2:
-		k.children = buildRound1Children(k)
-	case 3:
-		k.children = buildRound2Children(k)
-	case 4:
-		k.children = buildFinalChildren(k)
-	}
-}
-
-// FreeChildren implements cfr.GameTreeNode.
-func (k *PokerNode) FreeChildren() {
+// Close implements cfr.GameTreeNode.
+func (k *PokerNode) Close() {
 	k.children = nil
 	k.probabilities = nil
 }
 
 // NumChildren implements cfr.GameTreeNode.
-func (k PokerNode) NumChildren() int {
+func (k *PokerNode) NumChildren() int {
+	if k.children == nil {
+		k.buildChildren()
+	}
+
 	return len(k.children)
 }
 
 // GetChild implements cfr.GameTreeNode.
 func (k *PokerNode) GetChild(i int) cfr.GameTreeNode {
+	if k.children == nil {
+		k.buildChildren()
+	}
+
 	return &k.children[i]
 }
 
 // GetChildProbability implements cfr.GameTreeNode.
 func (k *PokerNode) GetChildProbability(i int) float32 {
+	if k.children == nil {
+		k.buildChildren()
+	}
+
 	return k.probabilities[i]
 }
 
@@ -189,6 +183,23 @@ func uniformDist(n int) []float32 {
 		result[i] = 1.0 / float32(n)
 	}
 	return result
+}
+
+func (k *PokerNode) buildChildren() {
+	switch len(k.history) {
+	case 0:
+		k.children = buildP0Deals()
+		k.probabilities = uniformDist(len(k.children))
+	case 1:
+		k.children = buildP1Deals(k)
+		k.probabilities = uniformDist(len(k.children))
+	case 2:
+		k.children = buildRound1Children(k)
+	case 3:
+		k.children = buildRound2Children(k)
+	case 4:
+		k.children = buildFinalChildren(k)
+	}
 }
 
 func buildP0Deals() []PokerNode {
