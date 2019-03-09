@@ -31,33 +31,41 @@ func TestPoker_InfoSets(t *testing.T) {
 }
 
 func TestPoker_VanillaCFR(t *testing.T) {
-	testCFR(t, cfr.SamplingParams{}, cfr.DiscountParams{}, 10000)
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.New(policy)
+	testCFR(t, opt, policy, 10000)
 }
 
 func TestPoker_ChanceSamplingCFR(t *testing.T) {
-	testCFR(t, cfr.SamplingParams{SampleChanceNodes: true}, cfr.DiscountParams{}, 100000)
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewChanceSampling(policy)
+	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_ExternalSamplingCFR(t *testing.T) {
-	es := cfr.SamplingParams{
-		SampleChanceNodes:     true,
-		SampleOpponentActions: true,
-	}
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewExternalSampling(policy)
+	testCFR(t, opt, policy, 200000)
+}
 
-	testCFR(t, es, cfr.DiscountParams{}, 100000)
+func TestPoker_OutcomeSamplingCFR(t *testing.T) {
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewOutcomeSampling(policy, 0.01)
+	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_CFRPlus(t *testing.T) {
-	testCFR(t, cfr.SamplingParams{}, cfr.DiscountParams{UseRegretMatchingPlus: true}, 10000)
+	plus := cfr.DiscountParams{UseRegretMatchingPlus: true}
+	policy := cfr.NewStrategyTable(plus)
+	opt := cfr.NewExternalSampling(policy)
+	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_LinearCFR(t *testing.T) {
-	es := cfr.SamplingParams{
-		SampleChanceNodes:     true,
-		SampleOpponentActions: true,
-	}
 	linear := cfr.DiscountParams{LinearWeighting: true}
-	testCFR(t, es, linear, 10000)
+	policy := cfr.NewStrategyTable(linear)
+	opt := cfr.NewExternalSampling(policy)
+	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_DiscountedCFR(t *testing.T) {
@@ -70,13 +78,17 @@ func TestPoker_DiscountedCFR(t *testing.T) {
 		DiscountGamma: 2.0,
 	}
 
-	testCFR(t, cfr.SamplingParams{}, abg, 10000)
+	policy := cfr.NewStrategyTable(abg)
+	opt := cfr.New(policy)
+	testCFR(t, opt, policy, 10000)
 }
 
-func testCFR(t *testing.T, params cfr.SamplingParams, discounts cfr.DiscountParams, nIter int) {
+type cfrImpl interface {
+	Run(cfr.GameTreeNode) float32
+}
+
+func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
 	root := NewGame()
-	policy := cfr.NewStrategyTable(discounts)
-	opt := cfr.New(params, policy)
 	var expectedValue float32
 	for i := 1; i <= nIter; i++ {
 		expectedValue += opt.Run(root)
@@ -123,13 +135,8 @@ func (m randomGuessModel) Predict(infoSet cfr.InfoSet, nActions int) []float32 {
 func TestPoker_DeepCFR(t *testing.T) {
 	buf := deepcfr.NewReservoirBuffer(10)
 	deepCFR := deepcfr.New(&randomGuessModel{}, buf)
-	params := cfr.SamplingParams{
-		SampleChanceNodes:     true,
-		SampleOpponentActions: true,
-	}
-
 	root := NewGame()
-	opt := cfr.New(params, deepCFR)
+	opt := cfr.NewExternalSampling(deepCFR)
 	for i := 1; i <= 1000; i++ {
 		opt.Run(root)
 	}

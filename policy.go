@@ -15,8 +15,8 @@ type StrategyTable struct {
 	iter   int
 
 	// Map of InfoSet Key -> strategy for that infoset.
-	strategies  map[string]*strategy
-	needsUpdate []*strategy
+	strategies    map[string]*strategy
+	mayNeedUpdate []*strategy
 }
 
 func NewStrategyTable(params DiscountParams) *StrategyTable {
@@ -28,13 +28,15 @@ func NewStrategyTable(params DiscountParams) *StrategyTable {
 }
 
 func (st *StrategyTable) Update() {
-	glog.V(1).Infof("Updating %d policies", len(st.needsUpdate))
+	glog.V(1).Infof("Updating %d policies", len(st.mayNeedUpdate))
 	discountPos, discountNeg, discountSum := st.params.GetDiscountFactors(st.iter)
-	for _, p := range st.needsUpdate {
-		p.nextStrategy(discountPos, discountNeg, discountSum)
+	for _, p := range st.mayNeedUpdate {
+		if p.needsUpdate() {
+			p.nextStrategy(discountPos, discountNeg, discountSum)
+		}
 	}
 
-	st.needsUpdate = st.needsUpdate[:0]
+	st.mayNeedUpdate = st.mayNeedUpdate[:0]
 	st.iter++
 }
 
@@ -54,7 +56,7 @@ func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 			s.numActions(), node.NumChildren(), node))
 	}
 
-	st.needsUpdate = append(st.needsUpdate, s)
+	st.mayNeedUpdate = append(st.mayNeedUpdate, s)
 	return s
 }
 
@@ -103,6 +105,10 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 
 	s.calcStrategy()
 	s.reachProb = 0.0
+}
+
+func (s *strategy) needsUpdate() bool {
+	return s.reachProb > 0
 }
 
 func (s *strategy) numActions() int {

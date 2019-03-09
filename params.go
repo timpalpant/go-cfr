@@ -4,15 +4,6 @@ import (
 	"math"
 )
 
-// SamplingParams are the configuration options for CFR sampling.
-// An empty SamplingParams is valid and corresponds to "vanilla" CFR
-// (no sampling, full game tree traversals).
-type SamplingParams struct {
-	SampleChanceNodes     bool // Chance Sampling
-	SamplePlayerActions   bool // Outcome Sampling
-	SampleOpponentActions bool // External Sampling
-}
-
 // DiscountParams modify how regret is accumulated.
 // An empty DiscountParams is valid and corresponds to traditional
 // (MC)CFR without weighting.
