@@ -121,7 +121,9 @@ func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
 
 type randomGuessModel struct{}
 
-func (m randomGuessModel) Train(samples deepcfr.Buffer) {}
+func (m randomGuessModel) Train(samples deepcfr.Buffer) deepcfr.TrainedModel {
+	return m
+}
 
 func (m randomGuessModel) Predict(infoSet cfr.InfoSet, nActions int) []float32 {
 	result := make([]float32, nActions)

@@ -2,6 +2,7 @@ package deepcfr
 
 import (
 	"github.com/timpalpant/go-cfr"
+	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
 // Sample is a single sample of instantaneous advantages
@@ -18,14 +19,18 @@ type Buffer interface {
 	GetSamples() []Sample
 }
 
-// Model is a regression model to use in DeepCFR that predicts
-// a vector of advantages for a given InfoSet.
+// Model is a regression model that can be used to fit the given samples.
 type Model interface {
-	Train(samples Buffer)
+	Train(samples Buffer) TrainedModel
+}
+
+// TrainedModel is a regression model to use in DeepCFR that predicts
+// a vector of advantages for a given InfoSet.
+type TrainedModel interface {
 	Predict(infoSet cfr.InfoSet, nActions int) (advantages []float32)
 }
 
-// DeepCFR implements cfr.PolicyStore, and uses function approximation
+// DeepCFR implements cfr.NodeStrategyStore, and uses function approximation
 // to estimate strategies rather than accumulation of regrets for all
 // infosets. This can be more tractable for large games where storing
 // all of the regrets for all infosets is impractical.
@@ -33,11 +38,13 @@ type Model interface {
 // During CFR iterations, samples are added to the given buffer.
 // When NextIter is called, the model is retrained.
 type DeepCFR struct {
-	model Model
-	buf   Buffer
-	iter  int
+	model         Model
+	buf           Buffer
+	iter          int
+	trainedModels []TrainedModel
 }
 
+// New returns a new DeepCFR policy with the given model and sample buffer.
 func New(model Model, buffer Buffer) *DeepCFR {
 	return &DeepCFR{
 		model: model,
@@ -46,36 +53,56 @@ func New(model Model, buffer Buffer) *DeepCFR {
 	}
 }
 
+func (d *DeepCFR) currentModel() TrainedModel {
+	if len(d.trainedModels) == 0 {
+		return nil
+	}
+
+	return d.trainedModels[len(d.trainedModels)-1]
+}
+
 // GetStrategy implements cfr.StrategyProfile.
 func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
 	infoSet := node.InfoSet(node.Player())
-	strategy := d.model.Predict(infoSet, node.NumChildren())
+
+	var strategy []float32
+	model := d.currentModel()
+	if model == nil {
+		strategy = uniformDist(node.NumChildren())
+	} else {
+		strategy = model.Predict(infoSet, node.NumChildren())
+	}
+
 	return dCFRPolicy{
-		strategy: strategy,
-		buf:      d.buf,
-		infoSet:  infoSet,
-		iter:     d.iter,
+		strategy:      strategy,
+		buf:           d.buf,
+		infoSet:       infoSet,
+		iter:          d.iter,
+		trainedModels: d.trainedModels,
 	}
 }
 
+// Update implements cfr.StrategyProfile.
 func (d *DeepCFR) Update() {
-	d.model.Train(d.buf)
+	trained := d.model.Train(d.buf)
+	d.trainedModels = append(d.trainedModels, trained)
 	d.iter++
 }
 
 type dCFRPolicy struct {
-	strategy []float32
-	buf      Buffer
-	infoSet  cfr.InfoSet
-	iter     int
+	strategy      []float32
+	buf           Buffer
+	infoSet       cfr.InfoSet
+	iter          int
+	trainedModels []TrainedModel
 }
 
-// GetActionProbability implements cfr.Policy.
+// GetActionProbability implements cfr.NodeStrategy.
 func (p dCFRPolicy) GetActionProbability(i int) float32 {
 	return p.strategy[i]
 }
 
-// AddRegret implements cfr.Policy.
+// AddRegret implements cfr.NodeStrategy.
 func (p dCFRPolicy) AddRegret(reachP, counterFactualP float32, advantages []float32) {
 	p.buf.AddSample(Sample{
 		InfoSet:    p.infoSet,
@@ -84,14 +111,16 @@ func (p dCFRPolicy) AddRegret(reachP, counterFactualP float32, advantages []floa
 	})
 }
 
-// NextStrategy implements cfr.Policy.
-func (p dCFRPolicy) NextStrategy(discountPos, discountNeg, discountSum float32) {
-	// DeepCFR training must be performed out-of-band by calling NextIter().
-}
-
-// GetAverageStrategy implements cfr.Policy.
+// GetAverageStrategy implements cfr.NodeStrategy.
 func (p dCFRPolicy) GetAverageStrategy() []float32 {
-	// TODO: Should average over all trained models like in Single Deep CFR:
+	// We calculate the average strategy as in Single Deep CFR:
 	// https://arxiv.org/pdf/1901.07621.pdf.
 	panic("not yet implemented")
+}
+
+func uniformDist(n int) []float32 {
+	result := make([]float32, n)
+	p := 1.0 / float32(n)
+	f32.AddConst(p, result)
+	return result
 }

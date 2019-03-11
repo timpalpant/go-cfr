@@ -1,6 +1,8 @@
 package cfr
 
 import (
+	"math/rand"
+
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
@@ -37,7 +39,7 @@ func (c *ChanceSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, reachP0
 }
 
 func (c *ChanceSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reachP1 float32) float32 {
-	child := node.SampleChild()
+	child := sampleChance(node)
 	// Sampling probabilities cancel out in the calculation of counterfactual value.
 	return c.runHelper(child, lastPlayer, reachP0, reachP1)
 }
@@ -70,4 +72,22 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, 1.0)
 	strat.AddRegret(reachP, counterFactualP, advantages)
 	return expectedUtil
+}
+
+func sampleChance(node GameTreeNode) GameTreeNode {
+	x := rand.Float32()
+	var cumProb float32
+	for i := 0; i < node.NumChildren(); i++ {
+		p := node.GetChildProbability(i)
+		cumProb += p
+		if cumProb > x {
+			return node.GetChild(i)
+		}
+	}
+
+	if cumProb < 1.0-eps { // Leave room for floating point error.
+		panic("probability distribution does not sum to 1!")
+	}
+
+	return node.GetChild(node.NumChildren() - 1)
 }
