@@ -39,26 +39,33 @@ type TrainedModel interface {
 // When NextIter is called, the model is retrained.
 type DeepCFR struct {
 	model         Model
-	buf           Buffer
+	buffers       map[int]Buffer
+	trainedModels map[int][]TrainedModel
 	iter          int
-	trainedModels []TrainedModel
 }
 
 // New returns a new DeepCFR policy with the given model and sample buffer.
-func New(model Model, buffer Buffer) *DeepCFR {
+func New(model Model, player0Buf, player1Buf Buffer) *DeepCFR {
 	return &DeepCFR{
 		model: model,
-		buf:   buffer,
-		iter:  1,
+		buffers: map[int]Buffer{
+			0: player0Buf,
+			1: player1Buf,
+		},
+		trainedModels: map[int][]TrainedModel{
+			0: []TrainedModel{},
+			1: []TrainedModel{},
+		},
+		iter: 1,
 	}
 }
 
-func (d *DeepCFR) currentModel() TrainedModel {
-	if len(d.trainedModels) == 0 {
+func (d *DeepCFR) currentModel(player int) TrainedModel {
+	if len(d.trainedModels[player]) == 0 {
 		return nil
 	}
 
-	return d.trainedModels[len(d.trainedModels)-1]
+	return d.trainedModels[player][len(d.trainedModels)-1]
 }
 
 // GetStrategy implements cfr.StrategyProfile.
@@ -66,7 +73,7 @@ func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
 	infoSet := node.InfoSet(node.Player())
 
 	var strategy []float32
-	model := d.currentModel()
+	model := d.currentModel(node.Player())
 	if model == nil {
 		strategy = uniformDist(node.NumChildren())
 	} else {
@@ -75,17 +82,20 @@ func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
 
 	return dCFRPolicy{
 		strategy:      strategy,
-		buf:           d.buf,
+		buf:           d.buffers[node.Player()],
 		infoSet:       infoSet,
 		iter:          d.iter,
-		trainedModels: d.trainedModels,
+		trainedModels: d.trainedModels[node.Player()],
 	}
 }
 
 // Update implements cfr.StrategyProfile.
 func (d *DeepCFR) Update() {
-	trained := d.model.Train(d.buf)
-	d.trainedModels = append(d.trainedModels, trained)
+	for player, buf := range d.buffers {
+		trained := d.model.Train(buf)
+		d.trainedModels[player] = append(d.trainedModels[player], trained)
+	}
+
 	d.iter++
 }
 
