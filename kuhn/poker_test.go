@@ -1,6 +1,8 @@
 package kuhn
 
 import (
+	"bytes"
+	"reflect"
 	"testing"
 
 	"github.com/timpalpant/go-cfr"
@@ -152,4 +154,44 @@ func TestPoker_DeepCFR(t *testing.T) {
 	for i, sample := range buf.GetSamples() {
 		t.Logf("Sample %d: %v", i, sample)
 	}
+}
+
+func TestMarshalStrategy(t *testing.T) {
+	root := NewGame()
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.New(policy)
+	opt.Run(root)
+	policy.Update()
+
+	var buf bytes.Buffer
+	if err := policy.MarshalTo(&buf); err != nil {
+		t.Error(err)
+	}
+
+	reloaded, err := cfr.LoadStrategyTable(&buf)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// Verify that current strategy and average strategy are unchanged
+	// after marshalling round trip.
+	tree.Visit(root, func(node cfr.GameTreeNode) {
+		if node.Type() != cfr.PlayerNode {
+			return
+		}
+
+		for i := 0; i < node.NumChildren(); i++ {
+			p1 := policy.GetStrategy(node).GetActionProbability(i)
+			p2 := reloaded.GetStrategy(node).GetActionProbability(i)
+			if p1 != p2 {
+				t.Errorf("expected %v, got %v", p1, p2)
+			}
+		}
+
+		avgStrat1 := policy.GetStrategy(node).GetAverageStrategy()
+		avgStrat2 := reloaded.GetStrategy(node).GetAverageStrategy()
+		if !reflect.DeepEqual(avgStrat1, avgStrat2) {
+			t.Errorf("expected %v, got %v", avgStrat1, avgStrat2)
+		}
+	})
 }
