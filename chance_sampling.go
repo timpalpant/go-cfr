@@ -39,7 +39,7 @@ func (c *ChanceSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, reachP0
 }
 
 func (c *ChanceSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reachP1 float32) float32 {
-	child := sampleChance(node)
+	child := SampleChanceNode(node)
 	// Sampling probabilities cancel out in the calculation of counterfactual value.
 	return c.runHelper(child, lastPlayer, reachP0, reachP1)
 }
@@ -74,7 +74,8 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 	return expectedUtil
 }
 
-func sampleChance(node GameTreeNode) GameTreeNode {
+// Sample one child of the given Chance node, according to its probability distribution.
+func SampleChanceNode(node GameTreeNode) GameTreeNode {
 	x := rand.Float32()
 	var cumProb float32
 	for i := 0; i < node.NumChildren(); i++ {
