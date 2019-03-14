@@ -61,11 +61,12 @@ func New(model Model, player0Buf, player1Buf Buffer) *DeepCFR {
 }
 
 func (d *DeepCFR) currentModel(player int) TrainedModel {
-	if len(d.trainedModels[player]) == 0 {
+	playerModels := d.trainedModels[player]
+	if len(playerModels) == 0 {
 		return nil
 	}
 
-	return d.trainedModels[player][len(d.trainedModels)-1]
+	return playerModels[len(playerModels)-1]
 }
 
 // GetStrategy implements cfr.StrategyProfile.

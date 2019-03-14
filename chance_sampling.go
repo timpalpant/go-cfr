@@ -78,7 +78,8 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 func SampleChanceNode(node GameTreeNode) GameTreeNode {
 	x := rand.Float32()
 	var cumProb float32
-	for i := 0; i < node.NumChildren(); i++ {
+	n := node.NumChildren()
+	for i := 0; i < n; i++ {
 		p := node.GetChildProbability(i)
 		cumProb += p
 		if cumProb > x {
