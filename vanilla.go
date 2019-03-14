@@ -24,7 +24,7 @@ func (c *CFR) runHelper(node GameTreeNode, lastPlayer int, reachP0, reachP1, rea
 	var ev float32
 	switch node.Type() {
 	case TerminalNode:
-		ev = node.Utility(lastPlayer)
+		ev = float32(node.Utility(lastPlayer))
 	case ChanceNode:
 		ev = c.handleChanceNode(node, lastPlayer, reachP0, reachP1, reachChance)
 	default:
@@ -40,7 +40,7 @@ func (c *CFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reach
 	var expectedValue float32
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
-		p := node.GetChildProbability(i)
+		p := float32(node.GetChildProbability(i))
 		expectedValue += p * c.runHelper(child, lastPlayer, reachP0, reachP1, reachChance*p)
 	}
 

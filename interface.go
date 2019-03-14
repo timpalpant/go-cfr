@@ -34,7 +34,7 @@ type GameTreeNode interface {
 	GetChild(i int) GameTreeNode
 	// Get the probability of the ith child of this node.
 	// May only be called for nodes with Type == Chance.
-	GetChildProbability(i int) float32
+	GetChildProbability(i int) float64
 
 	// Player returns this current node's acting player.
 	// It may only be called for nodes with IsChance() == false.
@@ -43,7 +43,7 @@ type GameTreeNode interface {
 	InfoSet(player int) InfoSet
 	// Utility returns this node's utility for the given player.
 	// It must only be called for nodes with type == Terminal.
-	Utility(player int) float32
+	Utility(player int) float64
 }
 
 // NodeStrategy learns a strategy for play at a given GameTreeNode.

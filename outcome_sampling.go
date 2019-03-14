@@ -30,7 +30,7 @@ func (c *OutcomeSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, reachP
 	var ev float32
 	switch node.Type() {
 	case TerminalNode:
-		ev = node.Utility(lastPlayer) / reachSigmaPrime
+		ev = float32(node.Utility(lastPlayer)) / reachSigmaPrime
 	case ChanceNode:
 		ev = c.handleChanceNode(node, lastPlayer, reachP0, reachP1, reachSigmaPrime)
 	default:

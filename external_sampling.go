@@ -32,7 +32,7 @@ func (c *ExternalSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, reach
 	var ev float32
 	switch node.Type() {
 	case TerminalNode:
-		ev = node.Utility(lastPlayer)
+		ev = float32(node.Utility(lastPlayer))
 	case ChanceNode:
 		ev = c.handleChanceNode(node, lastPlayer, reachP0, reachP1)
 	default:

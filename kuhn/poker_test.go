@@ -137,8 +137,9 @@ func (m randomGuessModel) Predict(infoSet cfr.InfoSet, nActions int) []float32 {
 }
 
 func TestPoker_DeepCFR(t *testing.T) {
-	buf := deepcfr.NewReservoirBuffer(10)
-	deepCFR := deepcfr.New(&randomGuessModel{}, buf)
+	buf0 := deepcfr.NewReservoirBuffer(10)
+	buf1 := deepcfr.NewReservoirBuffer(10)
+	deepCFR := deepcfr.New(&randomGuessModel{}, buf0, buf1)
 	root := NewGame()
 	opt := cfr.NewExternalSampling(deepCFR)
 	for i := 1; i <= 1000; i++ {
@@ -151,7 +152,13 @@ func TestPoker_DeepCFR(t *testing.T) {
 		opt.Run(root)
 	}
 
-	for i, sample := range buf.GetSamples() {
+	t.Logf("Buffer 0:")
+	for i, sample := range buf0.GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
+	}
+
+	t.Logf("Buffer 1:")
+	for i, sample := range buf1.GetSamples() {
 		t.Logf("Sample %d: %v", i, sample)
 	}
 }

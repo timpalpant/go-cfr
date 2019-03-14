@@ -45,7 +45,7 @@ func (c Card) String() string {
 type PokerNode struct {
 	player        int
 	children      []PokerNode
-	probabilities []float32
+	probabilities []float64
 	history       string
 
 	// Private card held by either player.
@@ -87,7 +87,7 @@ func (k *PokerNode) GetChild(i int) cfr.GameTreeNode {
 }
 
 // GetChildProbability implements cfr.GameTreeNode.
-func (k *PokerNode) GetChildProbability(i int) float32 {
+func (k *PokerNode) GetChildProbability(i int) float64 {
 	if k.children == nil {
 		k.buildChildren()
 	}
@@ -123,7 +123,7 @@ func (k *PokerNode) Player() int {
 }
 
 // Utility implements cfr.GameTreeNode.
-func (k *PokerNode) Utility(player int) float32 {
+func (k *PokerNode) Utility(player int) float64 {
 	cardPlayer := k.playerCard(player)
 	cardOpponent := k.playerCard(1 - player)
 
@@ -177,10 +177,10 @@ func (k *PokerNode) playerCard(player int) Card {
 	return k.p1Card
 }
 
-func uniformDist(n int) []float32 {
-	result := make([]float32, n)
+func uniformDist(n int) []float64 {
+	result := make([]float64, n)
 	for i := range result {
-		result[i] = 1.0 / float32(n)
+		result[i] = 1.0 / float64(n)
 	}
 	return result
 }
