@@ -1,5 +1,7 @@
 package cfr
 
+import "io"
+
 // NodeType is the type of node in an extensive-form game tree.
 type NodeType int
 
@@ -70,4 +72,6 @@ type StrategyProfile interface {
 	GetStrategy(GameTreeNode) NodeStrategy
 	// Calculate the next strategy profile for all visited nodes.
 	Update()
+	// Serialize the current state of the strategy profile to the given io.Writer.
+	MarshalTo(w io.Writer) error
 }
