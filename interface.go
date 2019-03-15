@@ -35,6 +35,11 @@ type GameTreeNode interface {
 	// Get the probability of the ith child of this node.
 	// May only be called for nodes with Type == Chance.
 	GetChildProbability(i int) float64
+	// Sample a single child from this Chance node according to the probability
+	// distribution over children.
+	// Implementations may use SampleChanceNode to sample from the CDF,
+	// or implement their own sampling.
+	SampleChild() (child GameTreeNode, p float64)
 
 	// Player returns this current node's acting player.
 	// It may only be called for nodes with IsChance() == false.

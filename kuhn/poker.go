@@ -96,9 +96,9 @@ func (k *PokerNode) GetChildProbability(i int) float64 {
 }
 
 // SampleChild implements cfr.GameTreeNode.
-func (k *PokerNode) SampleChild() cfr.GameTreeNode {
-	n := rand.Intn(k.NumChildren())
-	return k.GetChild(n)
+func (k *PokerNode) SampleChild() (cfr.GameTreeNode, float64) {
+	i := rand.Intn(k.NumChildren())
+	return k.GetChild(i), k.GetChildProbability(i)
 }
 
 // Type implements cfr.GameTreeNode.

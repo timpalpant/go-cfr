@@ -45,7 +45,7 @@ func (c *ExternalSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, reach
 }
 
 func (c *ExternalSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reachP1 float32) float32 {
-	child := SampleChanceNode(node)
+	child, _ := node.SampleChild()
 	// Sampling probabilities cancel out in the calculation of counterfactual value.
 	return c.runHelper(child, lastPlayer, reachP0, reachP1)
 }

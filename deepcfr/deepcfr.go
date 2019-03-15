@@ -1,6 +1,8 @@
 package deepcfr
 
 import (
+	"fmt"
+
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
@@ -39,24 +41,41 @@ type TrainedModel interface {
 // When NextIter is called, the model is retrained.
 type DeepCFR struct {
 	model         Model
-	buffers       map[int]Buffer
-	trainedModels map[int][]TrainedModel
+	buffers       []Buffer
+	trainedModels [][]TrainedModel
 	iter          int
 }
 
 // New returns a new DeepCFR policy with the given model and sample buffer.
-func New(model Model, player0Buf, player1Buf Buffer) *DeepCFR {
+func New(model Model, buffers []Buffer) *DeepCFR {
 	return &DeepCFR{
-		model: model,
-		buffers: map[int]Buffer{
-			0: player0Buf,
-			1: player1Buf,
-		},
-		trainedModels: map[int][]TrainedModel{
-			0: []TrainedModel{},
-			1: []TrainedModel{},
+		model:   model,
+		buffers: buffers,
+		trainedModels: [][]TrainedModel{
+			[]TrainedModel{},
+			[]TrainedModel{},
 		},
 		iter: 1,
+	}
+}
+
+// Resume returns a new DeepCFR policy initialized with the given
+// trained models and buffers.
+func Resume(model Model, buffers []Buffer, trainedModels [][]TrainedModel) *DeepCFR {
+	if len(buffers) != 2 || len(trainedModels) != 2 {
+		panic("must provide 2 buffers and 2 slices of trained models (for each player)")
+	}
+
+	if len(trainedModels[0]) != len(trainedModels[1]) {
+		panic(fmt.Errorf("must have equal numbers of trained models, got: %v, %v",
+			len(trainedModels[0]), len(trainedModels[1])))
+	}
+
+	return &DeepCFR{
+		model:         model,
+		buffers:       buffers,
+		trainedModels: trainedModels,
+		iter:          len(trainedModels[0]) + 1,
 	}
 }
 
