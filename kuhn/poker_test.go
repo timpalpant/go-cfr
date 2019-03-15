@@ -139,7 +139,7 @@ func (m randomGuessModel) Predict(infoSet cfr.InfoSet, nActions int) []float32 {
 func TestPoker_DeepCFR(t *testing.T) {
 	buf0 := deepcfr.NewReservoirBuffer(10)
 	buf1 := deepcfr.NewReservoirBuffer(10)
-	deepCFR := deepcfr.New(&randomGuessModel{}, buf0, buf1)
+	deepCFR := deepcfr.New(&randomGuessModel{}, []deepcfr.Buffer{buf0, buf1})
 	root := NewGame()
 	opt := cfr.NewExternalSampling(deepCFR)
 	for i := 1; i <= 1000; i++ {
