@@ -1,47 +1,46 @@
 package cfr
 
 import (
-	"encoding/binary"
+	"bytes"
+	"encoding/gob"
 	"io"
 )
 
-var byteOrder = binary.LittleEndian
-
 func LoadStrategyTable(r io.Reader) (*StrategyTable, error) {
+	dec := gob.NewDecoder(r)
 	var params DiscountParams
-	if err := binary.Read(r, byteOrder, &params); err != nil {
+	if err := dec.Decode(&params); err != nil {
 		return nil, err
 	}
 
 	var iter int64
-	if err := binary.Read(r, byteOrder, &iter); err != nil {
+	if err := dec.Decode(&iter); err != nil {
 		return nil, err
 	}
 
 	var nStrategies int64
-	if err := binary.Read(r, byteOrder, &nStrategies); err != nil {
+	if err := dec.Decode(&nStrategies); err != nil {
 		return nil, err
 	}
 
 	strategies := make(map[string]*strategy, nStrategies)
 	for i := int64(0); i < nStrategies; i++ {
 		var keyLen int64
-		if err := binary.Read(r, byteOrder, &keyLen); err != nil {
+		if err := dec.Decode(&keyLen); err != nil {
 			return nil, err
 		}
 
-		key := make([]byte, int(keyLen))
-		_, err := io.ReadFull(r, key)
-		if err != nil {
+		var key string
+		if err := dec.Decode(&key); err != nil {
 			return nil, err
 		}
 
-		s, err := readStrategy(r)
-		if err != nil {
+		var s strategy
+		if err := dec.Decode(&s); err != nil {
 			return nil, err
 		}
 
-		strategies[string(key)] = s
+		strategies[string(key)] = &s
 	}
 
 	return &StrategyTable{
@@ -52,28 +51,29 @@ func LoadStrategyTable(r io.Reader) (*StrategyTable, error) {
 }
 
 func (st *StrategyTable) MarshalTo(w io.Writer) error {
-	if err := binary.Write(w, byteOrder, st.params); err != nil {
+	enc := gob.NewEncoder(w)
+	if err := enc.Encode(st.params); err != nil {
 		return err
 	}
 
-	if err := binary.Write(w, byteOrder, int64(st.iter)); err != nil {
+	if err := enc.Encode(st.iter); err != nil {
 		return err
 	}
 
-	if err := binary.Write(w, byteOrder, int64(len(st.strategies))); err != nil {
+	if err := enc.Encode(len(st.strategies)); err != nil {
 		return err
 	}
 
 	for key, s := range st.strategies {
-		if err := binary.Write(w, byteOrder, int64(len(key))); err != nil {
+		if err := enc.Encode(len(key)); err != nil {
 			return err
 		}
 
-		if _, err := io.WriteString(w, key); err != nil {
+		if err := enc.Encode(key); err != nil {
 			return err
 		}
 
-		if err := s.marshalTo(w); err != nil {
+		if err := enc.Encode(s); err != nil {
 			return err
 		}
 	}
@@ -81,33 +81,47 @@ func (st *StrategyTable) MarshalTo(w io.Writer) error {
 	return nil
 }
 
-func readStrategy(r io.Reader) (*strategy, error) {
-	var nActions int64
-	if err := binary.Read(r, byteOrder, &nActions); err != nil {
-		return nil, err
+func (s *strategy) GobDecode(buf []byte) error {
+	r := bytes.NewReader(buf)
+	dec := gob.NewDecoder(r)
+
+	var nActions int
+	if err := dec.Decode(&nActions); err != nil {
+		return err
 	}
 
-	s := newStrategy(int(nActions))
-	if err := binary.Read(r, byteOrder, &s.regretSum); err != nil {
-		return nil, err
+	regretSum := make([]float32, 0, nActions)
+	if err := dec.Decode(&regretSum); err != nil {
+		return err
 	}
 
-	if err := binary.Read(r, byteOrder, &s.strategySum); err != nil {
-		return nil, err
+	strategySum := make([]float32, 0, nActions)
+	if err := dec.Decode(&strategySum); err != nil {
+		return err
 	}
 
+	s.regretSum = regretSum
+	s.strategySum = strategySum
+	s.current = make([]float32, nActions)
 	s.calcStrategy()
-	return s, nil
+	return nil
 }
 
-func (s *strategy) marshalTo(w io.Writer) error {
-	if err := binary.Write(w, byteOrder, int64(s.numActions())); err != nil {
-		return err
+func (s *strategy) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+
+	if err := enc.Encode(s.numActions()); err != nil {
+		return nil, err
 	}
 
-	if err := binary.Write(w, byteOrder, s.regretSum); err != nil {
-		return err
+	if err := enc.Encode(s.regretSum); err != nil {
+		return nil, err
 	}
 
-	return binary.Write(w, byteOrder, s.strategySum)
+	if err := enc.Encode(s.strategySum); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }

@@ -1,8 +1,6 @@
 package deepcfr
 
 import (
-	"io"
-
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
@@ -19,7 +17,6 @@ type Sample struct {
 type Buffer interface {
 	AddSample(s Sample)
 	GetSamples() []Sample
-	MarshalTo(io.Writer) error
 }
 
 // Model is a regression model that can be used to fit the given samples.

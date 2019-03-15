@@ -2,7 +2,6 @@ package deepcfr
 
 import (
 	"encoding/gob"
-	"io"
 	"math/rand"
 )
 
@@ -11,53 +10,35 @@ import (
 // samples are added via reservoir sampling, maintaining
 // a uniform distribution over all previous values.
 type ReservoirBuffer struct {
-	maxSize int
-	samples []Sample
-	n       int
+	MaxSize int
+	Samples []Sample
+	N       int
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
 func NewReservoirBuffer(maxSize int) *ReservoirBuffer {
 	return &ReservoirBuffer{
-		maxSize: maxSize,
+		MaxSize: maxSize,
 	}
 }
 
 // AddSample implements Buffer.
 func (b *ReservoirBuffer) AddSample(s Sample) {
-	b.n++
+	b.N++
 
-	if len(b.samples) < b.maxSize {
-		b.samples = append(b.samples, s)
+	if len(b.Samples) < b.MaxSize {
+		b.Samples = append(b.Samples, s)
 	} else {
-		m := rand.Intn(b.n)
-		if m < b.maxSize {
-			b.samples[m] = s
+		m := rand.Intn(b.N)
+		if m < b.MaxSize {
+			b.Samples[m] = s
 		}
 	}
 }
 
 // GetSamples implements Buffer.
 func (b *ReservoirBuffer) GetSamples() []Sample {
-	return b.samples
-}
-
-// MarshalTo implements Buffer.
-func (b *ReservoirBuffer) MarshalTo(w io.Writer) error {
-	enc := gob.NewEncoder(w)
-	if err := enc.Encode(b.maxSize); err != nil {
-		return err
-	}
-
-	if err := enc.Encode(b.samples); err != nil {
-		return err
-	}
-
-	if err := enc.Encode(b.n); err != nil {
-		return err
-	}
-
-	return nil
+	return b.Samples
 }
 
 func init() {
