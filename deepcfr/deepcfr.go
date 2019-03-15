@@ -1,7 +1,7 @@
 package deepcfr
 
 import (
-	"fmt"
+	"io"
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/internal/f32"
@@ -19,6 +19,7 @@ type Sample struct {
 type Buffer interface {
 	AddSample(s Sample)
 	GetSamples() []Sample
+	MarshalTo(io.Writer) error
 }
 
 // Model is a regression model that can be used to fit the given samples.
@@ -56,26 +57,6 @@ func New(model Model, buffers []Buffer) *DeepCFR {
 			[]TrainedModel{},
 		},
 		iter: 1,
-	}
-}
-
-// Resume returns a new DeepCFR policy initialized with the given
-// trained models and buffers.
-func Resume(model Model, buffers []Buffer, trainedModels [][]TrainedModel) *DeepCFR {
-	if len(buffers) != 2 || len(trainedModels) != 2 {
-		panic("must provide 2 buffers and 2 slices of trained models (for each player)")
-	}
-
-	if len(trainedModels[0]) != len(trainedModels[1]) {
-		panic(fmt.Errorf("must have equal numbers of trained models, got: %v, %v",
-			len(trainedModels[0]), len(trainedModels[1])))
-	}
-
-	return &DeepCFR{
-		model:         model,
-		buffers:       buffers,
-		trainedModels: trainedModels,
-		iter:          len(trainedModels[0]) + 1,
 	}
 }
 

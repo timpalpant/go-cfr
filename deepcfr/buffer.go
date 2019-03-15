@@ -1,6 +1,8 @@
 package deepcfr
 
 import (
+	"encoding/gob"
+	"io"
 	"math/rand"
 )
 
@@ -38,4 +40,26 @@ func (b *ReservoirBuffer) AddSample(s Sample) {
 // GetSamples implements Buffer.
 func (b *ReservoirBuffer) GetSamples() []Sample {
 	return b.samples
+}
+
+// MarshalTo implements Buffer.
+func (b *ReservoirBuffer) MarshalTo(w io.Writer) error {
+	enc := gob.NewEncoder(w)
+	if err := enc.Encode(b.maxSize); err != nil {
+		return err
+	}
+
+	if err := enc.Encode(b.samples); err != nil {
+		return err
+	}
+
+	if err := enc.Encode(b.n); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func init() {
+	gob.Register(&ReservoirBuffer{})
 }
