@@ -26,8 +26,6 @@ type InfoSet interface {
 type GameTreeNode interface {
 	// NodeType returns the type of game node.
 	Type() NodeType
-	// IsParallelizable indicates whether it is safe to parallelize over this node.
-	//IsParallelizable() bool
 
 	// Release resources held by this node (including any children).
 	Close()

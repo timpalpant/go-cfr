@@ -1,21 +1,24 @@
 package cfr
 
 import (
+	"sync"
+
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
 type ExternalSamplingCFR struct {
 	strategyProfile StrategyProfile
+	mu              sync.Mutex
 	iter            int
 	sampledActions  map[string]int
-	slicePool       *floatSlicePool
+	slicePool       *threadSafeFloatSlicePool
 }
 
 func NewExternalSampling(strategyProfile StrategyProfile) *ExternalSamplingCFR {
 	return &ExternalSamplingCFR{
 		strategyProfile: strategyProfile,
 		sampledActions:  make(map[string]int),
-		slicePool:       &floatSlicePool{},
+		slicePool:       &threadSafeFloatSlicePool{},
 	}
 }
 
@@ -93,6 +96,8 @@ func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, reachP0
 	player := node.Player()
 	strat := c.strategyProfile.GetStrategy(node)
 	key := node.InfoSet(player).Key()
+
+	c.mu.Lock()
 	i, ok := c.sampledActions[key]
 	if !ok {
 		// First time hitting this infoset during this run.
@@ -100,6 +105,7 @@ func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, reachP0
 		i = sampleOne(strat, node.NumChildren())
 		c.sampledActions[key] = i
 	}
+	c.mu.Unlock()
 
 	child := node.GetChild(i)
 	// Sampling probabilities cancel out in the calculation of counterfactual value,

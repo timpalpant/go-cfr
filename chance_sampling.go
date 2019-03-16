@@ -9,13 +9,13 @@ import (
 
 type ChanceSamplingCFR struct {
 	strategyProfile StrategyProfile
-	slicePool       *floatSlicePool
+	slicePool       *threadSafeFloatSlicePool
 }
 
 func NewChanceSampling(strategyProfile StrategyProfile) *ChanceSamplingCFR {
 	return &ChanceSamplingCFR{
 		strategyProfile: strategyProfile,
-		slicePool:       &floatSlicePool{},
+		slicePool:       &threadSafeFloatSlicePool{},
 	}
 }
 

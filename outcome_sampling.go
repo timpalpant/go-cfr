@@ -11,14 +11,14 @@ const eps = 1e-3
 type OutcomeSamplingCFR struct {
 	strategyProfile  StrategyProfile
 	explorationDelta float32
-	slicePool        *floatSlicePool
+	slicePool        *threadSafeFloatSlicePool
 }
 
 func NewOutcomeSampling(strategyProfile StrategyProfile, explorationDelta float32) *OutcomeSamplingCFR {
 	return &OutcomeSamplingCFR{
 		strategyProfile:  strategyProfile,
 		explorationDelta: explorationDelta,
-		slicePool:        &floatSlicePool{},
+		slicePool:        &threadSafeFloatSlicePool{},
 	}
 }
 
