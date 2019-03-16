@@ -3,6 +3,7 @@ package deepcfr
 import (
 	"encoding/gob"
 	"math/rand"
+	"sync"
 )
 
 // ReservoirBuffer is a collection of samples held in memory.
@@ -46,6 +47,31 @@ func (b *ReservoirBuffer) Cap() int {
 	return b.MaxSize
 }
 
+// ThreadSafeReservoirBuffer wraps ReservoirBuffer to be safe for use
+// from multiple goroutines.
+type ThreadSafeReservoirBuffer struct {
+	mu  sync.Mutex
+	buf *ReservoirBuffer
+}
+
+func (b *ThreadSafeReservoirBuffer) AddSample(s Sample) {
+	b.mu.Lock()
+	b.buf.AddSample(s)
+	b.mu.Unlock()
+}
+
+func (b *ThreadSafeReservoirBuffer) GetSamples() []Sample {
+	b.mu.Lock()
+	samples := b.buf.GetSamples()
+	b.mu.Unlock()
+	return samples
+}
+
+func NewThreadSafeReservoirBuffer(maxSize int) *ThreadSafeReservoirBuffer {
+	return &ThreadSafeReservoirBuffer{buf: NewReservoirBuffer(maxSize)}
+}
+
 func init() {
 	gob.Register(&ReservoirBuffer{})
+	gob.Register(&ThreadSafeReservoirBuffer{})
 }

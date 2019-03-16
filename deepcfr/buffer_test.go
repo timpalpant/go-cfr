@@ -46,3 +46,12 @@ func BenchmarkAddSample_Full(b *testing.B) {
 		buf.AddSample(Sample{Iter: i})
 	}
 }
+
+func BenchmarkThreadSafeAddSample_Full(b *testing.B) {
+	// Small buffer so that we test the general case where the buffer
+	// will be full.
+	buf := NewThreadSafeReservoirBuffer(1)
+	for i := 0; i < b.N; i++ {
+		buf.AddSample(Sample{Iter: i})
+	}
+}
