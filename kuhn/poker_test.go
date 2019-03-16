@@ -113,6 +113,34 @@ func BenchmarkPoker_OutcomeSamplingCFR(b *testing.B) {
 	runCFR(b, opt, policy, b.N)
 }
 
+func BenchmarkPoker_ThreadSafeVanillaCFR(b *testing.B) {
+	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
+	opt := cfr.New(policy)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
+func BenchmarkPoker_ThreadSafeChanceSamplingCFR(b *testing.B) {
+	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewChanceSampling(policy)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
+func BenchmarkPoker_ThreadSafeExternalSamplingCFR(b *testing.B) {
+	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewExternalSampling(policy)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
+func BenchmarkPoker_ThreadSafeOutcomeSamplingCFR(b *testing.B) {
+	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewOutcomeSampling(policy, 0.01)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
 type cfrImpl interface {
 	Run(cfr.GameTreeNode) float32
 }

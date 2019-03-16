@@ -2,12 +2,20 @@ package cfr
 
 import (
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/golang/glog"
 
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
+
+type updateableNodeStrategy interface {
+	NodeStrategy
+	numActions() int
+	needsUpdate() bool
+	nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32)
+}
 
 // StrategyTable implements traditional CFR by storing accumulated
 // regrets and strategy sums for each InfoSet, which is looked up by its Key().
@@ -16,22 +24,19 @@ type StrategyTable struct {
 	iter   int
 
 	// Map of InfoSet Key -> strategy for that infoset.
-	mu            sync.Mutex
-	strategies    map[string]*strategy
-	mayNeedUpdate []*strategy
+	strategies    map[string]updateableNodeStrategy
+	mayNeedUpdate []updateableNodeStrategy
 }
 
 func NewStrategyTable(params DiscountParams) *StrategyTable {
 	return &StrategyTable{
 		params:     params,
 		iter:       1,
-		strategies: make(map[string]*strategy),
+		strategies: make(map[string]updateableNodeStrategy),
 	}
 }
 
 func (st *StrategyTable) Update() {
-	st.mu.Lock()
-	defer st.mu.Unlock()
 	glog.V(1).Infof("Updating %d policies", len(st.mayNeedUpdate))
 	discountPos, discountNeg, discountSum := st.params.GetDiscountFactors(st.iter)
 	for _, p := range st.mayNeedUpdate {
@@ -49,8 +54,6 @@ func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 	is := node.InfoSet(p)
 	key := is.Key()
 
-	st.mu.Lock()
-	defer st.mu.Unlock()
 	s, ok := st.strategies[key]
 	if !ok {
 		s = newStrategy(node.NumChildren())
@@ -67,7 +70,6 @@ func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 }
 
 type strategy struct {
-	mu          sync.RWMutex
 	reachProb   float32
 	regretSum   []float32
 	current     []float32
@@ -84,14 +86,10 @@ func newStrategy(nActions int) *strategy {
 }
 
 func (s *strategy) GetActionProbability(i int) float32 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return s.current[i]
 }
 
 func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	if discountStrategySum != 1.0 {
 		f32.ScalUnitary(discountStrategySum, s.strategySum)
 	}
@@ -119,8 +117,6 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 }
 
 func (s *strategy) needsUpdate() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	return s.reachProb > 0
 }
 
@@ -143,8 +139,6 @@ func (s *strategy) calcStrategy() {
 }
 
 func (s *strategy) GetAverageStrategy() []float32 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
 	total := f32.Sum(s.strategySum)
 	if total > 0 {
 		avgStrat := make([]float32, len(s.strategySum))
@@ -156,8 +150,6 @@ func (s *strategy) GetAverageStrategy() []float32 {
 }
 
 func (s *strategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.reachProb += reachProb
 	f32.AxpyUnitary(counterFactualProb, instantaneousRegrets, s.regretSum)
 }
@@ -175,4 +167,92 @@ func makePositive(v []float32) {
 			v[i] = 0.0
 		}
 	}
+}
+
+// ThreadSafeStrategyTable wraps StrategyTable and is safe to use from
+// multiple goroutines.
+type ThreadSafeStrategyTable struct {
+	mu sync.Mutex
+	st *StrategyTable
+}
+
+func NewThreadSafeStrategyTable(params DiscountParams) *ThreadSafeStrategyTable {
+	st := NewStrategyTable(params)
+	return &ThreadSafeStrategyTable{st: st}
+}
+
+func (st *ThreadSafeStrategyTable) Update() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.st.Update()
+}
+
+func (st *ThreadSafeStrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
+	// We want to do this outside the lock because it may be relatively slow.
+	p := node.Player()
+	is := node.InfoSet(p)
+	key := is.Key()
+
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	s, ok := st.st.strategies[key]
+	if !ok {
+		s = newThreadSafeStrategy(node.NumChildren())
+		st.st.strategies[key] = s
+	}
+
+	if s.numActions() != node.NumChildren() {
+		panic(fmt.Errorf("strategy has n_actions=%v but node has n_children=%v: %v",
+			s.numActions(), node.NumChildren(), node))
+	}
+
+	st.st.mayNeedUpdate = append(st.st.mayNeedUpdate, s)
+	return s
+}
+
+func (st *ThreadSafeStrategyTable) MarshalTo(w io.Writer) error {
+	return st.st.MarshalTo(w)
+}
+
+type threadSafeStrategy struct {
+	mu sync.RWMutex
+	s  *strategy
+}
+
+func newThreadSafeStrategy(nActions int) *threadSafeStrategy {
+	return &threadSafeStrategy{s: newStrategy(nActions)}
+}
+
+func (s *threadSafeStrategy) GetActionProbability(i int) float32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.s.GetActionProbability(i)
+}
+
+func (s *threadSafeStrategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.s.AddRegret(reachProb, counterFactualProb, instantaneousRegrets)
+}
+
+func (s *threadSafeStrategy) GetAverageStrategy() []float32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.s.GetAverageStrategy()
+}
+
+func (s *threadSafeStrategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.s.nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum)
+}
+
+func (s *threadSafeStrategy) needsUpdate() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.s.needsUpdate()
+}
+
+func (s *threadSafeStrategy) numActions() int {
+	return len(s.s.current)
 }

@@ -23,7 +23,7 @@ func LoadStrategyTable(r io.Reader) (*StrategyTable, error) {
 		return nil, err
 	}
 
-	strategies := make(map[string]*strategy, nStrategies)
+	strategies := make(map[string]updateableNodeStrategy, nStrategies)
 	for i := int64(0); i < nStrategies; i++ {
 		var keyLen int64
 		if err := dec.Decode(&keyLen); err != nil {
