@@ -21,3 +21,14 @@ func BenchmarkThreadSafeAllocFree(b *testing.B) {
 		pool.free(v)
 	}
 }
+
+// BenchmarkThreadSafeAllocFree_Parallel-24    	 5000000	       327 ns/op
+func BenchmarkThreadSafeAllocFree_Parallel(b *testing.B) {
+	pool := &threadSafeFloatSlicePool{}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			v := pool.alloc(10)
+			pool.free(v)
+		}
+	})
+}

@@ -35,8 +35,8 @@ type threadSafeFloatSlicePool struct {
 }
 
 func (p *threadSafeFloatSlicePool) alloc(n int) []float32 {
+	p.mu.Lock()
 	if len(p.pool) > 0 {
-		p.mu.Lock()
 		m := len(p.pool)
 		next := p.pool[m-1]
 		p.pool = p.pool[:m-1]
@@ -45,6 +45,7 @@ func (p *threadSafeFloatSlicePool) alloc(n int) []float32 {
 		return append(next, make([]float32, n)...)
 	}
 
+	p.mu.Unlock()
 	return make([]float32, n)
 }
 

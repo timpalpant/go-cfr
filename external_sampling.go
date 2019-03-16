@@ -22,8 +22,8 @@ func NewExternalSampling(strategyProfile StrategyProfile) *ExternalSamplingCFR {
 
 func (c *ExternalSamplingCFR) Run(node GameTreeNode) float32 {
 	c.mu.Lock()
-	c.iter++
 	traversingPlayer := c.iter % 2
+	c.iter++
 	c.mu.Unlock()
 
 	sampledActions := make(map[string]int)
