@@ -41,6 +41,11 @@ func (b *ReservoirBuffer) GetSamples() []Sample {
 	return b.Samples
 }
 
+// Cap returns the max number of samples that will be kept in the buffer.
+func (b *ReservoirBuffer) Cap() int {
+	return b.MaxSize
+}
+
 func init() {
 	gob.Register(&ReservoirBuffer{})
 }
