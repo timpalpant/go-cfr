@@ -85,22 +85,40 @@ func TestPoker_DiscountedCFR(t *testing.T) {
 	testCFR(t, opt, policy, 10000)
 }
 
+func BenchmarkPoker_VanillaCFR(b *testing.B) {
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.New(policy)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
+func BenchmarkPoker_ChanceSamplingCFR(b *testing.B) {
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewChanceSampling(policy)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
+func BenchmarkPoker_ExternalSamplingCFR(b *testing.B) {
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewExternalSampling(policy)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
+func BenchmarkPoker_OutcomeSamplingCFR(b *testing.B) {
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewOutcomeSampling(policy, 0.01)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
 type cfrImpl interface {
 	Run(cfr.GameTreeNode) float32
 }
 
 func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
-	root := NewGame()
-	var expectedValue float32
-	for i := 1; i <= nIter; i++ {
-		expectedValue += opt.Run(root)
-		if i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
-		}
-
-		policy.Update()
-	}
-
+	root := runCFR(t, opt, policy, nIter)
 	seen := make(map[cfr.NodeStrategy]struct{})
 	tree.Visit(root, func(node cfr.GameTreeNode) {
 		if node.Type() != cfr.PlayerNode {
@@ -119,6 +137,25 @@ func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
 
 		seen[strat] = struct{}{}
 	})
+}
+
+type logger interface {
+	Logf(string, ...interface{})
+}
+
+func runCFR(log logger, opt cfrImpl, policy cfr.StrategyProfile, nIter int) cfr.GameTreeNode {
+	root := NewGame()
+	var expectedValue float32
+	for i := 1; i <= nIter; i++ {
+		expectedValue += opt.Run(root)
+		if nIter/10 > 0 && i%(nIter/10) == 0 {
+			log.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
+		}
+
+		policy.Update()
+	}
+
+	return root
 }
 
 type randomGuessModel struct{}
