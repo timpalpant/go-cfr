@@ -2,6 +2,7 @@ package cfr
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/golang/glog"
 
@@ -15,6 +16,7 @@ type StrategyTable struct {
 	iter   int
 
 	// Map of InfoSet Key -> strategy for that infoset.
+	mu            sync.Mutex
 	strategies    map[string]*strategy
 	mayNeedUpdate []*strategy
 }
@@ -28,6 +30,8 @@ func NewStrategyTable(params DiscountParams) *StrategyTable {
 }
 
 func (st *StrategyTable) Update() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
 	glog.V(1).Infof("Updating %d policies", len(st.mayNeedUpdate))
 	discountPos, discountNeg, discountSum := st.params.GetDiscountFactors(st.iter)
 	for _, p := range st.mayNeedUpdate {
@@ -45,6 +49,8 @@ func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 	is := node.InfoSet(p)
 	key := is.Key()
 
+	st.mu.Lock()
+	defer st.mu.Unlock()
 	s, ok := st.strategies[key]
 	if !ok {
 		s = newStrategy(node.NumChildren())
@@ -61,6 +67,7 @@ func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 }
 
 type strategy struct {
+	mu          sync.RWMutex
 	reachProb   float32
 	regretSum   []float32
 	current     []float32
@@ -77,10 +84,14 @@ func newStrategy(nActions int) *strategy {
 }
 
 func (s *strategy) GetActionProbability(i int) float32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.current[i]
 }
 
 func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if discountStrategySum != 1.0 {
 		f32.ScalUnitary(discountStrategySum, s.strategySum)
 	}
@@ -108,6 +119,8 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 }
 
 func (s *strategy) needsUpdate() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.reachProb > 0
 }
 
@@ -130,6 +143,8 @@ func (s *strategy) calcStrategy() {
 }
 
 func (s *strategy) GetAverageStrategy() []float32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	total := f32.Sum(s.strategySum)
 	if total > 0 {
 		avgStrat := make([]float32, len(s.strategySum))
@@ -141,6 +156,8 @@ func (s *strategy) GetAverageStrategy() []float32 {
 }
 
 func (s *strategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.reachProb += reachProb
 	f32.AxpyUnitary(counterFactualProb, instantaneousRegrets, s.regretSum)
 }
