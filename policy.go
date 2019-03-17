@@ -17,7 +17,7 @@ type updateableNodeStrategy interface {
 	nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32)
 }
 
-// StrategyTable implements traditional CFR by storing accumulated
+// StrategyTable implements traditional (tabular) CFR by storing accumulated
 // regrets and strategy sums for each InfoSet, which is looked up by its Key().
 type StrategyTable struct {
 	params DiscountParams
@@ -28,6 +28,7 @@ type StrategyTable struct {
 	mayNeedUpdate []updateableNodeStrategy
 }
 
+// NewStrategyTable creates a new StrategyTable with the given DiscountParams.
 func NewStrategyTable(params DiscountParams) *StrategyTable {
 	return &StrategyTable{
 		params:     params,
@@ -36,6 +37,8 @@ func NewStrategyTable(params DiscountParams) *StrategyTable {
 	}
 }
 
+// Update performs regret matching for all nodes within this strategy profile that have
+// been touched since the last call to Update().
 func (st *StrategyTable) Update() {
 	glog.V(1).Infof("Updating %d policies", len(st.mayNeedUpdate))
 	discountPos, discountNeg, discountSum := st.params.GetDiscountFactors(st.iter)
@@ -49,6 +52,8 @@ func (st *StrategyTable) Update() {
 	st.iter++
 }
 
+// GetStrategy returns the NodeStrategy corresponding to the given game node.
+// The strategy is looked up for the current player at that node based on its InfoSet.Key().
 func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 	p := node.Player()
 	is := node.InfoSet(p)
@@ -169,8 +174,7 @@ func makePositive(v []float32) {
 	}
 }
 
-// ThreadSafeStrategyTable wraps StrategyTable and is safe to use from
-// multiple goroutines.
+// ThreadSafeStrategyTable wraps StrategyTable and is safe to use from multiple goroutines.
 type ThreadSafeStrategyTable struct {
 	mu sync.Mutex
 	st *StrategyTable

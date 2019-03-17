@@ -1,15 +1,14 @@
 package cfr
 
 import (
-	"sync"
+	"sync/atomic"
 
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
 type ExternalSamplingCFR struct {
 	strategyProfile StrategyProfile
-	mu              sync.Mutex
-	iter            int
+	iter            int64
 	slicePool       *threadSafeFloatSlicePool
 }
 
@@ -21,11 +20,8 @@ func NewExternalSampling(strategyProfile StrategyProfile) *ExternalSamplingCFR {
 }
 
 func (c *ExternalSamplingCFR) Run(node GameTreeNode) float32 {
-	c.mu.Lock()
-	traversingPlayer := c.iter % 2
-	c.iter++
-	c.mu.Unlock()
-
+	iter := atomic.AddInt64(&c.iter, 1)
+	traversingPlayer := int(iter % 2)
 	sampledActions := make(map[string]int)
 	return c.runHelper(node, node.Player(), 1.0, 1.0, traversingPlayer, sampledActions)
 }

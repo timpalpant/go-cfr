@@ -8,12 +8,17 @@ import (
 
 const eps = 1e-3
 
+// OutcomeSamplingCFR performs CFR iterations by sampling all player and chance actions
+// such that each run corresponds to a single terminal history through the game tree.
 type OutcomeSamplingCFR struct {
 	strategyProfile  StrategyProfile
 	explorationDelta float32
 	slicePool        *threadSafeFloatSlicePool
 }
 
+// NewOutcomeSampling creates a new OutcomeSamplingCFR with the given strategy profile.
+// explorationDelta is the fraction of the time in (0.0, 1.0) to explore off-policy random
+// actions.
 func NewOutcomeSampling(strategyProfile StrategyProfile, explorationDelta float32) *OutcomeSamplingCFR {
 	return &OutcomeSamplingCFR{
 		strategyProfile:  strategyProfile,
@@ -22,6 +27,8 @@ func NewOutcomeSampling(strategyProfile StrategyProfile, explorationDelta float3
 	}
 }
 
+// Run performs a single iteration of outcome sampling CFR.
+// It is safe to call concurrently from multiple goroutines if the underlying strategy profile is thread-safe.
 func (c *OutcomeSamplingCFR) Run(node GameTreeNode) float32 {
 	return c.runHelper(node, node.Player(), 1.0, 1.0, 1.0)
 }

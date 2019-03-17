@@ -6,6 +6,7 @@ import (
 	"io"
 )
 
+// LoadStrategyTable loads a new StrategyTable from the given reader.
 func LoadStrategyTable(r io.Reader) (*StrategyTable, error) {
 	dec := gob.NewDecoder(r)
 	var params DiscountParams
@@ -50,6 +51,7 @@ func LoadStrategyTable(r io.Reader) (*StrategyTable, error) {
 	}, nil
 }
 
+// MarshalTo implements StrategyProfile.
 func (st *StrategyTable) MarshalTo(w io.Writer) error {
 	enc := gob.NewEncoder(w)
 	if err := enc.Encode(st.params); err != nil {
