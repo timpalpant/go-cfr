@@ -53,7 +53,7 @@ func TestPoker_ExternalSamplingCFR(t *testing.T) {
 func TestPoker_OutcomeSamplingCFR(t *testing.T) {
 	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
 	opt := cfr.NewOutcomeSampling(policy, 0.05)
-	testCFR(t, opt, policy, 5000000)
+	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_CFRPlus(t *testing.T) {
