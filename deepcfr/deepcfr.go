@@ -97,6 +97,11 @@ func (d *DeepCFR) Update() {
 	d.iter++
 }
 
+// Iter implements cfr.StrategyProfile.
+func (d *DeepCFR) Iter() int {
+	return d.iter
+}
+
 type dCFRPolicy struct {
 	strategy      []float32
 	buf           Buffer

@@ -52,6 +52,10 @@ func (st *StrategyTable) Update() {
 	st.iter++
 }
 
+func (st *StrategyTable) Iter() int {
+	return st.iter
+}
+
 // GetStrategy returns the NodeStrategy corresponding to the given game node.
 // The strategy is looked up for the current player at that node based on its InfoSet.Key().
 func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
@@ -189,6 +193,12 @@ func (st *ThreadSafeStrategyTable) Update() {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	st.st.Update()
+}
+
+func (st *ThreadSafeStrategyTable) Iter() int {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.st.Iter()
 }
 
 func (st *ThreadSafeStrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {

@@ -72,6 +72,8 @@ type StrategyProfile interface {
 	GetStrategy(GameTreeNode) NodeStrategy
 	// Calculate the next strategy profile for all visited nodes.
 	Update()
+	// Get the current iteration (number of times update has been called).
+	Iter() int
 	// Serialize the current state of the strategy profile to the given io.Writer.
 	MarshalTo(w io.Writer) error
 }
