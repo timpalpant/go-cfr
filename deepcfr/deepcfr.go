@@ -89,10 +89,10 @@ func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
 
 // Update implements cfr.StrategyProfile.
 func (d *DeepCFR) Update() {
-	for player, buf := range d.buffers {
-		trained := d.model.Train(buf)
-		d.trainedModels[player] = append(d.trainedModels[player], trained)
-	}
+	player := d.iter % 2
+	buf := d.buffers[player]
+	trained := d.model.Train(buf)
+	d.trainedModels[player] = append(d.trainedModels[player], trained)
 
 	d.iter++
 }
