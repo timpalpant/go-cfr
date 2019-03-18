@@ -12,7 +12,9 @@ import (
 func (d *DeepCFR) MarshalTo(w io.Writer) error {
 	enc := gob.NewEncoder(w)
 
-	if err := enc.Encode(d.model); err != nil {
+	// Need to pass pointer to interface so that Gob sees the interface rather
+	// than the concrete type. See the example in encoding/gob.
+	if err := enc.Encode(&d.model); err != nil {
 		return err
 	}
 

@@ -3,6 +3,7 @@
 package kuhn
 
 import (
+	"encoding/gob"
 	"fmt"
 	"math/rand"
 
@@ -269,4 +270,8 @@ func buildFinalChildren(parent *PokerNode) []PokerNode {
 	}
 
 	return result
+}
+
+func init() {
+	gob.Register(pokerInfoSet(""))
 }
