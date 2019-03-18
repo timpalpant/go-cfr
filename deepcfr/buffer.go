@@ -91,7 +91,8 @@ func (b *ReservoirBuffer) GobDecode(buf []byte) error {
 // ThreadSafeReservoirBuffer wraps ReservoirBuffer to be safe for use
 // from multiple goroutines.
 type ThreadSafeReservoirBuffer struct {
-	mu  sync.Mutex
+	mu sync.Mutex
+	// FIXME: This should not be a pointer.
 	buf *ReservoirBuffer
 }
 
@@ -117,6 +118,8 @@ func (b *ThreadSafeReservoirBuffer) GobEncode() ([]byte, error) {
 
 // GobEncode implements gob.GobDecoder.
 func (b *ThreadSafeReservoirBuffer) GobDecode(buf []byte) error {
+	// Hack to instantiate empty reservoir buffer to perform decoding.
+	b.buf = NewReservoirBuffer(1)
 	return b.buf.GobDecode(buf)
 }
 
