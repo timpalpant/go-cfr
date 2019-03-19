@@ -12,6 +12,7 @@ import (
 
 type updateableNodeStrategy interface {
 	NodeStrategy
+	getStrategySum(int) float32
 	numActions() int
 	needsUpdate() bool
 	nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32)
@@ -96,6 +97,10 @@ func newStrategy(nActions int) *strategy {
 
 func (s *strategy) GetActionProbability(i int) float32 {
 	return s.current[i]
+}
+
+func (s *strategy) getStrategySum(i int) float32 {
+	return s.strategySum[i]
 }
 
 func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
@@ -241,6 +246,12 @@ func (s *threadSafeStrategy) GetActionProbability(i int) float32 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.s.GetActionProbability(i)
+}
+
+func (s *threadSafeStrategy) getStrategySum(i int) float32 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.s.getStrategySum(i)
 }
 
 func (s *threadSafeStrategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
