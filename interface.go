@@ -55,9 +55,9 @@ type GameTreeNode interface {
 
 // NodeStrategy learns a strategy for play at a given GameTreeNode.
 type NodeStrategy interface {
-	// GetActionProbability gets the probability with which the ith
+	// GetPolicy gets the probability with which the ith
 	// available action should be played.
-	GetActionProbability(i int) float32
+	GetPolicy() []float32
 	// AddRegret provides new observed instantaneous regrets (with probability p)
 	// to add to the total accumulated regret.
 	AddRegret(reachP, counterfactualP float32, instantaneousAdvantages []float32)
@@ -68,7 +68,7 @@ type NodeStrategy interface {
 // StrategyProfile maintains a collection of NodeStrategy for each node that
 // is visited in a traversal of the game tree.
 type StrategyProfile interface {
-	// GetPolicy returns the NodePolicy for the given GameTreeNode.
+	// GetStrategy returns the NodeStrategy for the given GameTreeNode.
 	GetStrategy(GameTreeNode) NodeStrategy
 	// Calculate the next strategy profile for all visited nodes.
 	Update()

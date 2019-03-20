@@ -82,7 +82,6 @@ func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 type strategy struct {
 	reachProb   float32
 	regretSum   []float32
-	current     []float32
 	strategySum []float32
 }
 
@@ -90,13 +89,25 @@ func newStrategy(nActions int) *strategy {
 	return &strategy{
 		reachProb:   0.0,
 		regretSum:   make([]float32, nActions),
-		current:     uniformDist(nActions),
 		strategySum: make([]float32, nActions),
 	}
 }
 
-func (s *strategy) GetActionProbability(i int) float32 {
-	return s.current[i]
+func (s *strategy) GetPolicy() []float32 {
+	result := make([]float32, s.numActions())
+	copy(result, s.regretSum)
+	makePositive(result)
+	total := f32.Sum(result)
+	if total > 0 {
+		f32.ScalUnitary(1.0/total, result)
+		return result
+	}
+
+	for i := range result {
+		result[i] = 1.0 / float32(len(result))
+	}
+
+	return result
 }
 
 func (s *strategy) getStrategySum(i int) float32 {
@@ -108,7 +119,8 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 		f32.ScalUnitary(discountStrategySum, s.strategySum)
 	}
 
-	f32.AxpyUnitary(s.reachProb, s.current, s.strategySum)
+	current := s.GetPolicy()
+	f32.AxpyUnitary(s.reachProb, current, s.strategySum)
 
 	if discountPositiveRegret != 1.0 {
 		for i, x := range s.regretSum {
@@ -126,7 +138,6 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 		}
 	}
 
-	s.calcStrategy()
 	s.reachProb = 0.0
 }
 
@@ -135,21 +146,7 @@ func (s *strategy) needsUpdate() bool {
 }
 
 func (s *strategy) numActions() int {
-	return len(s.current)
-}
-
-func (s *strategy) calcStrategy() {
-	copy(s.current, s.regretSum)
-	makePositive(s.current)
-	total := f32.Sum(s.current)
-	if total > 0 {
-		f32.ScalUnitary(1.0/total, s.current)
-		return
-	}
-
-	for i := range s.current {
-		s.current[i] = 1.0 / float32(len(s.current))
-	}
+	return len(s.regretSum)
 }
 
 func (s *strategy) GetAverageStrategy() []float32 {
@@ -160,7 +157,7 @@ func (s *strategy) GetAverageStrategy() []float32 {
 		return avgStrat
 	}
 
-	return uniformDist(len(s.current))
+	return uniformDist(len(s.regretSum))
 }
 
 func (s *strategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
@@ -242,10 +239,10 @@ func newThreadSafeStrategy(nActions int) *threadSafeStrategy {
 	return &threadSafeStrategy{s: newStrategy(nActions)}
 }
 
-func (s *threadSafeStrategy) GetActionProbability(i int) float32 {
+func (s *threadSafeStrategy) GetPolicy() []float32 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.s.GetActionProbability(i)
+	return s.s.GetPolicy()
 }
 
 func (s *threadSafeStrategy) getStrategySum(i int) float32 {
@@ -279,5 +276,5 @@ func (s *threadSafeStrategy) needsUpdate() bool {
 }
 
 func (s *threadSafeStrategy) numActions() int {
-	return len(s.s.current)
+	return len(s.s.regretSum)
 }

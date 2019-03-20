@@ -65,6 +65,7 @@ func (c *OutcomeSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int,
 func (c *OutcomeSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance, reachSigmaPrime float32) (w0, w1, pz float32) {
 	player := node.Player()
 	strat := c.strategyProfile.GetStrategy(node)
+	policy := strat.GetPolicy()
 
 	// Sample one action according to current strategy profile + exploration.
 	// No need to save since due to perfect recall an infoset will never be revisited.
@@ -72,11 +73,11 @@ func (c *OutcomeSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP
 	if rand.Float32() < c.explorationDelta {
 		selectedAction = rand.Intn(node.NumChildren())
 	} else {
-		selectedAction = sampleOne(strat, node.NumChildren())
+		selectedAction = sampleOne(policy)
 	}
 
 	child := node.GetChild(selectedAction)
-	p := strat.GetActionProbability(selectedAction)
+	p := policy[selectedAction]
 	f := c.explorationDelta
 	sigmaPrime := f * (1.0 / float32(node.NumChildren())) // Due to exploration.
 	sigmaPrime += (1.0 - f) * p                           // Due to strategy.
@@ -100,11 +101,10 @@ func (c *OutcomeSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP
 	return w0, w1, p * pz
 }
 
-func sampleOne(strat NodeStrategy, numActions int) int {
+func sampleOne(pv []float32) int {
 	x := rand.Float32()
 	var cumProb float32
-	for i := 0; i < numActions; i++ {
-		p := strat.GetActionProbability(i)
+	for i, p := range pv {
 		cumProb += p
 		if cumProb > x {
 			return i
@@ -115,5 +115,5 @@ func sampleOne(strat NodeStrategy, numActions int) int {
 		panic("probability distribution does not sum to 1!")
 	}
 
-	return numActions - 1
+	return len(pv) - 1
 }

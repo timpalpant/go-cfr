@@ -77,12 +77,13 @@ func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNod
 	x := rand.Float32()
 	sSum := computeSum(strat)
 	var expectedUtil float32
+	policy := strat.GetPolicy()
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
+		p := policy[i]
 		s := strat.getStrategySum(i)
 		rho := computeRho(s, sSum, c.params)
 		if x < rho {
-			p := strat.GetActionProbability(i)
 			var util float32
 			if player == 0 {
 				util = c.runHelper(child, player, p*reachP0, reachP1, traversingPlayer, sampledActions)
@@ -113,7 +114,8 @@ func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, 
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		i = sampleOne(strat, node.NumChildren())
+		policy := strat.GetPolicy()
+		i = sampleOne(policy)
 		sampledActions[key] = i
 	}
 

@@ -48,13 +48,14 @@ func (c *ChanceSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, 
 func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1 float32) float32 {
 	player := node.Player()
 	strat := c.strategyProfile.GetStrategy(node)
+	policy := strat.GetPolicy()
 
 	advantages := c.slicePool.alloc(node.NumChildren())
 	defer c.slicePool.free(advantages)
 	var expectedUtil float32
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
-		p := strat.GetActionProbability(i)
+		p := policy[i]
 		var util float32
 		if player == 0 {
 			util = c.runHelper(child, player, p*reachP0, reachP1)

@@ -118,6 +118,18 @@ func BenchmarkPoker_ExternalSamplingCFR(b *testing.B) {
 	runCFR(b, opt, policy, b.N)
 }
 
+func BenchmarkPoker_AverageStrategySamplingCFR(b *testing.B) {
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	params := cfr.ASSamplingParams{
+		Epsilon: 0.05,
+		Beta:    1000000,
+		Tau:     1000,
+	}
+	opt := cfr.NewAverageStrategySampling(policy, params)
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
 func BenchmarkPoker_OutcomeSamplingCFR(b *testing.B) {
 	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
 	opt := cfr.NewOutcomeSampling(policy, 0.01)
@@ -276,11 +288,16 @@ func TestMarshalStrategy(t *testing.T) {
 			return
 		}
 
-		for i := 0; i < node.NumChildren(); i++ {
-			p1 := policy.GetStrategy(node).GetActionProbability(i)
-			p2 := reloaded.GetStrategy(node).GetActionProbability(i)
-			if p1 != p2 {
-				t.Errorf("expected %v, got %v", p1, p2)
+		p1 := policy.GetStrategy(node).GetPolicy()
+		p2 := reloaded.GetStrategy(node).GetPolicy()
+		if len(p1) != len(p2) {
+			t.Errorf("expected %v, got %v", p1, p2)
+		} else {
+			for i := 0; i < len(p1); i++ {
+				if p1[i] != p2[i] {
+					t.Errorf("expected %v, got %v", p1, p2)
+					break
+				}
 			}
 		}
 

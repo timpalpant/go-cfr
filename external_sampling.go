@@ -65,10 +65,11 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, reac
 	strat := c.strategyProfile.GetStrategy(node)
 	advantages := c.slicePool.alloc(node.NumChildren())
 	defer c.slicePool.free(advantages)
+	policy := strat.GetPolicy()
 	var expectedUtil float32
 	for i := 0; i < node.NumChildren(); i++ {
 		child := node.GetChild(i)
-		p := strat.GetActionProbability(i)
+		p := policy[i]
 		var util float32
 		if player == 0 {
 			util = c.runHelper(child, player, p*reachP0, reachP1, traversingPlayer, sampledActions)
@@ -100,7 +101,8 @@ func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, reachP0
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		i = sampleOne(strat, node.NumChildren())
+		policy := strat.GetPolicy()
+		i = sampleOne(policy)
 		sampledActions[key] = i
 	}
 

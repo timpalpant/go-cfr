@@ -104,8 +104,6 @@ func (s *strategy) GobDecode(buf []byte) error {
 
 	s.regretSum = regretSum
 	s.strategySum = strategySum
-	s.current = make([]float32, nActions)
-	s.calcStrategy()
 	return nil
 }
 
