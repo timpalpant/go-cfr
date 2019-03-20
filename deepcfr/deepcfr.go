@@ -111,7 +111,7 @@ type dCFRPolicy struct {
 }
 
 // GetActionProbability implements cfr.NodeStrategy.
-func (p dCFRPolicy) GetPolicy() []float32 {
+func (p dCFRPolicy) GetPolicy(_ []float32) []float32 {
 	return p.strategy
 }
 

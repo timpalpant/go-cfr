@@ -93,21 +93,27 @@ func newStrategy(nActions int) *strategy {
 	}
 }
 
-func (s *strategy) GetPolicy() []float32 {
-	result := make([]float32, s.numActions())
-	copy(result, s.regretSum)
-	makePositive(result)
-	total := f32.Sum(result)
+func (s *strategy) GetPolicy(p []float32) []float32 {
+	if len(p) < s.numActions() {
+		needed := s.numActions() - len(p)
+		p = append(p, make([]float32, needed)...)
+	} else if len(p) > s.numActions() {
+		p = p[:s.numActions()]
+	}
+
+	copy(p, s.regretSum)
+	makePositive(p)
+	total := f32.Sum(p)
 	if total > 0 {
-		f32.ScalUnitary(1.0/total, result)
-		return result
+		f32.ScalUnitary(1.0/total, p)
+		return p
 	}
 
-	for i := range result {
-		result[i] = 1.0 / float32(len(result))
+	for i := range p {
+		p[i] = 1.0 / float32(len(p))
 	}
 
-	return result
+	return p
 }
 
 func (s *strategy) getStrategySum(i int) float32 {
@@ -119,7 +125,8 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 		f32.ScalUnitary(discountStrategySum, s.strategySum)
 	}
 
-	current := s.GetPolicy()
+	// TODO: Use a pool here and return the slice.
+	current := s.GetPolicy(nil)
 	f32.AxpyUnitary(s.reachProb, current, s.strategySum)
 
 	if discountPositiveRegret != 1.0 {
@@ -239,10 +246,10 @@ func newThreadSafeStrategy(nActions int) *threadSafeStrategy {
 	return &threadSafeStrategy{s: newStrategy(nActions)}
 }
 
-func (s *threadSafeStrategy) GetPolicy() []float32 {
+func (s *threadSafeStrategy) GetPolicy(p []float32) []float32 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.s.GetPolicy()
+	return s.s.GetPolicy(p)
 }
 
 func (s *threadSafeStrategy) getStrategySum(i int) float32 {

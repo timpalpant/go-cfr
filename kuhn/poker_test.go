@@ -288,8 +288,8 @@ func TestMarshalStrategy(t *testing.T) {
 			return
 		}
 
-		p1 := policy.GetStrategy(node).GetPolicy()
-		p2 := reloaded.GetStrategy(node).GetPolicy()
+		p1 := policy.GetStrategy(node).GetPolicy(nil)
+		p2 := reloaded.GetStrategy(node).GetPolicy(nil)
 		if len(p1) != len(p2) {
 			t.Errorf("expected %v, got %v", p1, p2)
 		} else {

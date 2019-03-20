@@ -64,14 +64,17 @@ func (c *OutcomeSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int,
 
 func (c *OutcomeSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance, reachSigmaPrime float32) (w0, w1, pz float32) {
 	player := node.Player()
+	nChildren := node.NumChildren()
 	strat := c.strategyProfile.GetStrategy(node)
-	policy := strat.GetPolicy()
+	policy := c.slicePool.alloc(nChildren)
+	defer c.slicePool.free(policy)
+	policy = strat.GetPolicy(policy)
 
 	// Sample one action according to current strategy profile + exploration.
 	// No need to save since due to perfect recall an infoset will never be revisited.
 	var selectedAction int
 	if rand.Float32() < c.explorationDelta {
-		selectedAction = rand.Intn(node.NumChildren())
+		selectedAction = rand.Intn(nChildren)
 	} else {
 		selectedAction = sampleOne(policy)
 	}

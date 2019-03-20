@@ -49,12 +49,15 @@ func (c *CFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reach
 
 func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
 	player := node.Player()
+	nChildren := node.NumChildren()
 	strat := c.strategyProfile.GetStrategy(node)
-	policy := strat.GetPolicy()
-	advantages := c.slicePool.alloc(node.NumChildren())
+	policy := c.slicePool.alloc(nChildren)
+	policy = strat.GetPolicy(policy)
+	defer c.slicePool.free(policy)
+	advantages := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(advantages)
 	var expectedUtil float32
-	for i := 0; i < node.NumChildren(); i++ {
+	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
 		p := policy[i]
 		var util float32

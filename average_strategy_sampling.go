@@ -71,14 +71,17 @@ func (c *AverageStrategySamplingCFR) handlePlayerNode(node GameTreeNode, reachP0
 
 func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNode, reachP0, reachP1 float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
+	nChildren := node.NumChildren()
 	strat := c.strategyProfile.GetStrategy(node).(updateableNodeStrategy)
-	advantages := c.slicePool.alloc(node.NumChildren())
+	policy := c.slicePool.alloc(nChildren)
+	defer c.slicePool.free(policy)
+	policy = strat.GetPolicy(policy)
+	advantages := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(advantages)
 	x := rand.Float32()
 	sSum := computeSum(strat)
 	var expectedUtil float32
-	policy := strat.GetPolicy()
-	for i := 0; i < node.NumChildren(); i++ {
+	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
 		p := policy[i]
 		s := strat.getStrategySum(i)
@@ -114,8 +117,10 @@ func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, 
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		policy := strat.GetPolicy()
+		policy := c.slicePool.alloc(node.NumChildren())
+		policy = strat.GetPolicy(policy)
 		i = sampleOne(policy)
+		c.slicePool.free(policy)
 		sampledActions[key] = i
 	}
 
