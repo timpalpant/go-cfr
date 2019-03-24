@@ -20,14 +20,13 @@ func (c *ExternalSamplingCFR) Run(node GameTreeNode) float32 {
 	iter := c.strategyProfile.Iter()
 	traversingPlayer := int(iter % 2)
 	sampledActions := make(map[string]int)
-	return c.runHelper(node, node.Player(), 1.0, 1.0, traversingPlayer, sampledActions)
+	return c.runHelper(node, node.Player(), 1.0, traversingPlayer, sampledActions)
 }
 
 func (c *ExternalSamplingCFR) runHelper(
 	node GameTreeNode,
 	lastPlayer int,
-	reachP0 float32,
-	reachP1 float32,
+	sampleProb float32,
 	traversingPlayer int,
 	sampledActions map[string]int) float32 {
 
@@ -36,31 +35,31 @@ func (c *ExternalSamplingCFR) runHelper(
 	case TerminalNode:
 		ev = float32(node.Utility(lastPlayer))
 	case ChanceNode:
-		ev = c.handleChanceNode(node, lastPlayer, reachP0, reachP1, traversingPlayer, sampledActions)
+		ev = c.handleChanceNode(node, lastPlayer, sampleProb, traversingPlayer, sampledActions)
 	default:
 		sgn := getSign(lastPlayer, node.Player())
-		ev = sgn * c.handlePlayerNode(node, reachP0, reachP1, traversingPlayer, sampledActions)
+		ev = sgn * c.handlePlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	}
 
 	node.Close()
 	return ev
 }
 
-func (c *ExternalSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reachP1 float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *ExternalSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	child, _ := node.SampleChild()
 	// Sampling probabilities cancel out in the calculation of counterfactual value.
-	return c.runHelper(child, lastPlayer, reachP0, reachP1, traversingPlayer, sampledActions)
+	return c.runHelper(child, lastPlayer, sampleProb, traversingPlayer, sampledActions)
 }
 
-func (c *ExternalSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1 float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *ExternalSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	if traversingPlayer == node.Player() {
-		return c.handleTraversingPlayerNode(node, reachP0, reachP1, traversingPlayer, sampledActions)
+		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	} else {
-		return c.handleSampledPlayerNode(node, reachP0, reachP1, traversingPlayer, sampledActions)
+		return c.handleSampledPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	}
 }
 
-func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, reachP0, reachP1 float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	strat := c.strategyProfile.GetStrategy(node)
@@ -73,29 +72,19 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, reac
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
 		p := policy[i]
-		var util float32
-		if player == 0 {
-			util = c.runHelper(child, player, p*reachP0, reachP1, traversingPlayer, sampledActions)
-		} else {
-			util = c.runHelper(child, player, reachP0, p*reachP1, traversingPlayer, sampledActions)
-		}
-
+		util := c.runHelper(child, player, p*sampleProb, traversingPlayer, sampledActions)
 		advantages[i] = util
 		expectedUtil += p * util
 	}
 
-	// Transform action utilities into instantaneous advantages by
-	// subtracting out the expected utility over all possible actions.
 	f32.AddConst(-expectedUtil, advantages)
-	reachP := reachProb(player, reachP0, reachP1, 1.0)
-	counterFactualP := counterFactualProb(player, reachP0, reachP1, 1.0)
-	strat.AddRegret(reachP, counterFactualP, advantages)
+	strat.AddRegret(sampleProb, 1.0, advantages)
 	return expectedUtil
 }
 
 // Sample player action according to strategy, do not update policy.
 // Save selected action so that they are reused if this infoset is hit again.
-func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, reachP0, reachP1 float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
 	strat := c.strategyProfile.GetStrategy(node)
 	key := node.InfoSet(player).Key()
@@ -114,5 +103,5 @@ func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, reachP0
 	child := node.GetChild(i)
 	// Sampling probabilities cancel out in the calculation of counterfactual value,
 	// so we don't include them here.
-	return c.runHelper(child, player, reachP0, reachP1, traversingPlayer, sampledActions)
+	return c.runHelper(child, player, sampleProb, traversingPlayer, sampledActions)
 }

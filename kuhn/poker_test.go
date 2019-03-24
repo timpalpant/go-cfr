@@ -68,6 +68,12 @@ func TestPoker_AverageStrategySamplingCFR(t *testing.T) {
 	testCFR(t, opt, policy, 200000)
 }
 
+func TestPoker_RobustSamplingCFR(t *testing.T) {
+	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	opt := cfr.NewRobustSampling(policy, 1)
+	testCFR(t, opt, policy, 200000)
+}
+
 func TestPoker_CFRPlus(t *testing.T) {
 	plus := cfr.DiscountParams{UseRegretMatchingPlus: true}
 	policy := cfr.NewStrategyTable(plus)

@@ -51,21 +51,21 @@ func main() {
 }
 ```
 
+## Variants implemented
+
+- Vanilla CFR: https://poker.cs.ualberta.ca/publications/NIPS07-cfr.pdf
+- CFR+: https://arxiv.org/abs/1407.5042
+- Discounted (including Linear) CFR: https://arxiv.org/abs/1809.04040
+- Monte Carlo CFR (MC-CFR):
+    - Chance Sampling, External Sampling, Outcome Sampling CFR: http://mlanctot.info/files/papers/nips09mccfr.pdf
+    - Average Strategy CFR: https://papers.nips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions.pdf
+    - Robust Sampling CFR: https://arxiv.org/abs/1901.07621
+- Deep CFR: https://arxiv.org/abs/1811.00164
+- Single Deep CFR: https://arxiv.org/abs/1901.07621
+
 ## Contributing
 
 Pull requests and issues are welcomed!
-
-Some additional CFR algorithms that could be implemented:
-
-- Linear CFR: https://arxiv.org/abs/1809.04040
-- CFR+: https://arxiv.org/abs/1407.5042
-- Monte Carlo CFR:
-    - Chance Sampling CFR: http://mlanctot.info/files/papers/nips09mccfr.pdf
-    - External Sampling CFR: http://mlanctot.info/files/papers/nips09mccfr.pdf
-    - Outcome Sampling CFR: https://papers.nips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions.pdf
-    - Average Strategy CFR: https://papers.nips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions.pdf
-- Deep CFR: https://arxiv.org/abs/1811.00164
-- Single Deep CFR: https://arxiv.org/abs/1901.07621
 
 ## License
 
