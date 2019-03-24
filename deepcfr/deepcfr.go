@@ -70,20 +70,13 @@ func (d *DeepCFR) currentModel(player int) TrainedModel {
 func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
 	infoSet := node.InfoSet(node.Player())
 
-	var strategy []float32
-	model := d.currentModel(node.Player())
-	if model == nil {
-		strategy = uniformDist(node.NumChildren())
-	} else {
-		strategy = model.Predict(infoSet, node.NumChildren())
-	}
-
 	return dCFRPolicy{
-		strategy:      strategy,
 		buf:           d.buffers[node.Player()],
 		infoSet:       infoSet,
 		iter:          d.iter,
 		trainedModels: d.trainedModels[node.Player()],
+		currentModel:  d.currentModel(node.Player()),
+		nActions:      node.NumActions(),
 	}
 }
 
@@ -103,16 +96,24 @@ func (d *DeepCFR) Iter() int {
 }
 
 type dCFRPolicy struct {
-	strategy      []float32
 	buf           Buffer
 	infoSet       cfr.InfoSet
 	iter          int
 	trainedModels []TrainedModel
+	currentModel  TrainedModel
+	nActions      int
 }
 
 // GetActionProbability implements cfr.NodeStrategy.
 func (p dCFRPolicy) GetPolicy(_ []float32) []float32 {
-	return p.strategy
+	var strategy []float32
+	if p.currentModel == nil {
+		strategy = uniformDist(p.nActions)
+	} else {
+		strategy = p.currentModel.Predict(p.infoSet, p.nActions)
+	}
+
+	return strategy
 }
 
 // AddRegret implements cfr.NodeStrategy.
