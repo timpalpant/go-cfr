@@ -63,7 +63,7 @@ type NodeStrategy interface {
 	GetPolicy(p []float32) []float32
 	// AddRegret provides new observed instantaneous regrets (with probability p)
 	// to add to the total accumulated regret.
-	AddRegret(reachP, counterfactualP float32, instantaneousAdvantages []float32)
+	AddRegret(reachP float32, instantaneousRegrets []float32)
 	// GetAverageStrategy returns the average strategy over all iterations.
 	GetAverageStrategy() []float32
 }

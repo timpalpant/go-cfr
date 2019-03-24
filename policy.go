@@ -167,9 +167,9 @@ func (s *strategy) GetAverageStrategy() []float32 {
 	return uniformDist(len(s.regretSum))
 }
 
-func (s *strategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
+func (s *strategy) AddRegret(reachProb float32, instantaneousRegrets []float32) {
 	s.reachProb += reachProb
-	f32.AxpyUnitary(counterFactualProb, instantaneousRegrets, s.regretSum)
+	f32.Add(s.regretSum, instantaneousRegrets)
 }
 
 func uniformDist(n int) []float32 {
@@ -258,10 +258,10 @@ func (s *threadSafeStrategy) getStrategySum(i int) float32 {
 	return s.s.getStrategySum(i)
 }
 
-func (s *threadSafeStrategy) AddRegret(reachProb, counterFactualProb float32, instantaneousRegrets []float32) {
+func (s *threadSafeStrategy) AddRegret(reachProb float32, instantaneousRegrets []float32) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.s.AddRegret(reachProb, counterFactualProb, instantaneousRegrets)
+	s.s.AddRegret(reachProb, instantaneousRegrets)
 }
 
 func (s *threadSafeStrategy) GetAverageStrategy() []float32 {

@@ -76,7 +76,8 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	f32.AddConst(-expectedUtil, advantages)
 	reachP := reachProb(player, reachP0, reachP1, reachChance)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
-	strat.AddRegret(reachP, counterFactualP, advantages)
+	f32.ScalUnitary(counterFactualP, advantages)
+	strat.AddRegret(reachP, advantages)
 	return expectedUtil
 }
 

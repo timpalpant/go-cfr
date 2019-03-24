@@ -100,7 +100,7 @@ func (c *OutcomeSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP
 	// subtracting out the expected utility over all possible actions.
 	f32.AddConst(-p*pz*w, advantages) // Eq. 7, Bowling (2009) supplemental.
 	reachP := reachProb(player, reachP0, reachP1, reachChance)
-	strat.AddRegret(reachP, 1.0, advantages)
+	strat.AddRegret(reachP, advantages)
 	return w0, w1, p * pz
 }
 

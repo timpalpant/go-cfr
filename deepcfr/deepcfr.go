@@ -76,7 +76,7 @@ func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
 		iter:          d.iter,
 		trainedModels: d.trainedModels[node.Player()],
 		currentModel:  d.currentModel(node.Player()),
-		nActions:      node.NumActions(),
+		nActions:      node.NumChildren(),
 	}
 }
 
@@ -117,7 +117,7 @@ func (p dCFRPolicy) GetPolicy(_ []float32) []float32 {
 }
 
 // AddRegret implements cfr.NodeStrategy.
-func (p dCFRPolicy) AddRegret(reachP, counterFactualP float32, advantages []float32) {
+func (p dCFRPolicy) AddRegret(reachP float32, advantages []float32) {
 	p.buf.AddSample(Sample{
 		InfoSet:    p.infoSet,
 		Advantages: append([]float32(nil), advantages...),

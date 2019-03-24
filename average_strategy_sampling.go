@@ -101,8 +101,7 @@ func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNod
 
 	f32.AddConst(-expectedUtil, advantages)
 	reachP := reachProb(player, reachP0, reachP1, 1.0)
-	counterFactualP := counterFactualProb(player, reachP0, reachP1, 1.0)
-	strat.AddRegret(reachP, counterFactualP, advantages)
+	strat.AddRegret(reachP, advantages)
 	return expectedUtil
 }
 
