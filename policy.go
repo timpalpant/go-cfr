@@ -5,18 +5,8 @@ import (
 	"io"
 	"sync"
 
-	"github.com/golang/glog"
-
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
-
-type updateableNodeStrategy interface {
-	NodeStrategy
-	getStrategySum(int) float32
-	numActions() int
-	needsUpdate() bool
-	nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32)
-}
 
 // StrategyTable implements traditional (tabular) CFR by storing accumulated
 // regrets and strategy sums for each InfoSet, which is looked up by its Key().
@@ -25,31 +15,29 @@ type StrategyTable struct {
 	iter   int
 
 	// Map of InfoSet Key -> strategy for that infoset.
-	strategies    map[string]updateableNodeStrategy
-	mayNeedUpdate []updateableNodeStrategy
+	strategies  map[string]*strategy
+	needsUpdate map[*strategy]struct{}
 }
 
 // NewStrategyTable creates a new StrategyTable with the given DiscountParams.
 func NewStrategyTable(params DiscountParams) *StrategyTable {
 	return &StrategyTable{
-		params:     params,
-		iter:       1,
-		strategies: make(map[string]updateableNodeStrategy),
+		params:      params,
+		iter:        1,
+		strategies:  make(map[string]*strategy),
+		needsUpdate: make(map[*strategy]struct{}),
 	}
 }
 
 // Update performs regret matching for all nodes within this strategy profile that have
 // been touched since the last call to Update().
 func (st *StrategyTable) Update() {
-	glog.V(1).Infof("Updating %d policies", len(st.mayNeedUpdate))
 	discountPos, discountNeg, discountSum := st.params.GetDiscountFactors(st.iter)
-	for _, p := range st.mayNeedUpdate {
-		if p.needsUpdate() {
-			p.nextStrategy(discountPos, discountNeg, discountSum)
-		}
+	for s := range st.needsUpdate {
+		s.nextStrategy(discountPos, discountNeg, discountSum)
 	}
 
-	st.mayNeedUpdate = st.mayNeedUpdate[:0]
+	st.needsUpdate = make(map[*strategy]struct{})
 	st.iter++
 }
 
@@ -57,9 +45,34 @@ func (st *StrategyTable) Iter() int {
 	return st.iter
 }
 
-// GetStrategy returns the NodeStrategy corresponding to the given game node.
-// The strategy is looked up for the current player at that node based on its InfoSet.Key().
-func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
+func (st *StrategyTable) AddRegret(node GameTreeNode, instantaneousRegrets []float32) {
+	s := st.getStrategy(node)
+	s.AddRegret(instantaneousRegrets)
+	st.needsUpdate[s] = struct{}{}
+}
+
+func (st *StrategyTable) GetPolicy(node GameTreeNode) []float32 {
+	s := st.getStrategy(node)
+	return s.GetPolicy()
+}
+
+func (st *StrategyTable) AddStrategyWeight(node GameTreeNode, w float32) {
+	s := st.getStrategy(node)
+	s.AddStrategyWeight(w)
+	st.needsUpdate[s] = struct{}{}
+}
+
+func (st *StrategyTable) GetAverageStrategy(node GameTreeNode) []float32 {
+	s := st.getStrategy(node)
+	return s.GetAverageStrategy()
+}
+
+func (st *StrategyTable) GetStrategySum(node GameTreeNode) []float32 {
+	s := st.getStrategy(node)
+	return s.strategySum
+}
+
+func (st *StrategyTable) getStrategy(node GameTreeNode) *strategy {
 	p := node.Player()
 	is := node.InfoSet(p)
 	key := is.Key()
@@ -75,49 +88,28 @@ func (st *StrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
 			s.numActions(), node.NumChildren(), node))
 	}
 
-	st.mayNeedUpdate = append(st.mayNeedUpdate, s)
 	return s
 }
 
 type strategy struct {
-	reachProb   float32
+	currentStrategy       []float32
+	currentStrategyWeight float32
+
 	regretSum   []float32
 	strategySum []float32
 }
 
 func newStrategy(nActions int) *strategy {
 	return &strategy{
-		reachProb:   0.0,
-		regretSum:   make([]float32, nActions),
-		strategySum: make([]float32, nActions),
+		currentStrategy:       uniformDist(nActions),
+		currentStrategyWeight: 0.0,
+		regretSum:             make([]float32, nActions),
+		strategySum:           make([]float32, nActions),
 	}
 }
 
-func (s *strategy) GetPolicy(p []float32) []float32 {
-	if len(p) < s.numActions() {
-		needed := s.numActions() - len(p)
-		p = append(p, make([]float32, needed)...)
-	} else if len(p) > s.numActions() {
-		p = p[:s.numActions()]
-	}
-
-	copy(p, s.regretSum)
-	makePositive(p)
-	total := f32.Sum(p)
-	if total > 0 {
-		f32.ScalUnitary(1.0/total, p)
-		return p
-	}
-
-	for i := range p {
-		p[i] = 1.0 / float32(len(p))
-	}
-
-	return p
-}
-
-func (s *strategy) getStrategySum(i int) float32 {
-	return s.strategySum[i]
+func (s *strategy) GetPolicy() []float32 {
+	return s.currentStrategy
 }
 
 func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
@@ -125,9 +117,7 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 		f32.ScalUnitary(discountStrategySum, s.strategySum)
 	}
 
-	// TODO: Use a pool here and return the slice.
-	current := s.GetPolicy(nil)
-	f32.AxpyUnitary(s.reachProb, current, s.strategySum)
+	f32.AxpyUnitary(s.currentStrategyWeight, s.currentStrategy, s.strategySum)
 
 	if discountPositiveRegret != 1.0 {
 		for i, x := range s.regretSum {
@@ -145,15 +135,33 @@ func (s *strategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, 
 		}
 	}
 
-	s.reachProb = 0.0
+	s.regretMatching()
+	s.currentStrategyWeight = 0.0
 }
 
-func (s *strategy) needsUpdate() bool {
-	return s.reachProb > 0
+func (s *strategy) regretMatching() {
+	copy(s.currentStrategy, s.regretSum)
+	makePositive(s.currentStrategy)
+	total := f32.Sum(s.currentStrategy)
+	if total > 0 {
+		f32.ScalUnitary(1.0/total, s.currentStrategy)
+	} else {
+		for i := range s.currentStrategy {
+			s.currentStrategy[i] = 1.0 / float32(len(s.currentStrategy))
+		}
+	}
 }
 
 func (s *strategy) numActions() int {
 	return len(s.regretSum)
+}
+
+func (s *strategy) AddRegret(instantaneousRegrets []float32) {
+	f32.Add(s.regretSum, instantaneousRegrets)
+}
+
+func (s *strategy) AddStrategyWeight(w float32) {
+	s.currentStrategyWeight += w
 }
 
 func (s *strategy) GetAverageStrategy() []float32 {
@@ -165,11 +173,6 @@ func (s *strategy) GetAverageStrategy() []float32 {
 	}
 
 	return uniformDist(len(s.regretSum))
-}
-
-func (s *strategy) AddRegret(reachProb float32, instantaneousRegrets []float32) {
-	s.reachProb += reachProb
-	f32.Add(s.regretSum, instantaneousRegrets)
 }
 
 func uniformDist(n int) []float32 {
@@ -210,78 +213,32 @@ func (st *ThreadSafeStrategyTable) Iter() int {
 	return st.st.Iter()
 }
 
-func (st *ThreadSafeStrategyTable) GetStrategy(node GameTreeNode) NodeStrategy {
-	// We want to do this outside the lock because it may be relatively slow.
-	p := node.Player()
-	is := node.InfoSet(p)
-	key := is.Key()
-
+func (st *ThreadSafeStrategyTable) AddRegret(node GameTreeNode, instantaneousRegrets []float32) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	s, ok := st.st.strategies[key]
-	if !ok {
-		s = newThreadSafeStrategy(node.NumChildren())
-		st.st.strategies[key] = s
-	}
+	st.st.AddRegret(node, instantaneousRegrets)
+}
 
-	if s.numActions() != node.NumChildren() {
-		panic(fmt.Errorf("strategy has n_actions=%v but node has n_children=%v: %v",
-			s.numActions(), node.NumChildren(), node))
-	}
+func (st *ThreadSafeStrategyTable) GetPolicy(node GameTreeNode) []float32 {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	// TODO: There is some work that can be done outside the lock, consider
+	// duplicating this function here if it it's worth it.
+	return st.st.GetPolicy(node)
+}
 
-	st.st.mayNeedUpdate = append(st.st.mayNeedUpdate, s)
-	return s
+func (st *ThreadSafeStrategyTable) AddStrategyWeight(node GameTreeNode, w float32) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.st.AddStrategyWeight(node, w)
+}
+
+func (st *ThreadSafeStrategyTable) GetAverageStrategy(node GameTreeNode) []float32 {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return st.st.GetAverageStrategy(node)
 }
 
 func (st *ThreadSafeStrategyTable) MarshalTo(w io.Writer) error {
 	return st.st.MarshalTo(w)
-}
-
-type threadSafeStrategy struct {
-	mu sync.RWMutex
-	s  *strategy
-}
-
-func newThreadSafeStrategy(nActions int) *threadSafeStrategy {
-	return &threadSafeStrategy{s: newStrategy(nActions)}
-}
-
-func (s *threadSafeStrategy) GetPolicy(p []float32) []float32 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.s.GetPolicy(p)
-}
-
-func (s *threadSafeStrategy) getStrategySum(i int) float32 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.s.getStrategySum(i)
-}
-
-func (s *threadSafeStrategy) AddRegret(reachProb float32, instantaneousRegrets []float32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.s.AddRegret(reachProb, instantaneousRegrets)
-}
-
-func (s *threadSafeStrategy) GetAverageStrategy() []float32 {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.s.GetAverageStrategy()
-}
-
-func (s *threadSafeStrategy) nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum float32) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.s.nextStrategy(discountPositiveRegret, discountNegativeRegret, discountStrategySum)
-}
-
-func (s *threadSafeStrategy) needsUpdate() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.s.needsUpdate()
-}
-
-func (s *threadSafeStrategy) numActions() int {
-	return len(s.s.regretSum)
 }

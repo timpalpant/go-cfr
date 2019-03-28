@@ -62,42 +62,45 @@ func (c *ExternalSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb flo
 func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
-	strat := c.strategyProfile.GetStrategy(node)
-	policy := c.slicePool.alloc(nChildren)
-	defer c.slicePool.free(policy)
-	policy = strat.GetPolicy(policy)
-	advantages := c.slicePool.alloc(nChildren)
-	defer c.slicePool.free(advantages)
-	var expectedUtil float32
+	policy := c.strategyProfile.GetPolicy(node)
+	regrets := c.slicePool.alloc(nChildren)
+	defer c.slicePool.free(regrets)
+	var cfValue float32
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
 		p := policy[i]
-		util := c.runHelper(child, player, p*sampleProb, traversingPlayer, sampledActions)
-		advantages[i] = util
-		expectedUtil += p * util
+		regrets[i] = c.runHelper(child, player, p*sampleProb, traversingPlayer, sampledActions)
+		cfValue += p * regrets[i]
 	}
 
-	f32.AddConst(-expectedUtil, advantages)
-	strat.AddRegret(sampleProb, advantages)
-	return expectedUtil
+	if sampleProb > 0 {
+		f32.AddConst(-cfValue, regrets)
+		f32.ScalUnitary(1.0/sampleProb, regrets)
+		c.strategyProfile.AddRegret(node, regrets)
+	}
+
+	return cfValue
 }
 
 // Sample player action according to strategy, do not update policy.
 // Save selected action so that they are reused if this infoset is hit again.
 func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
-	strat := c.strategyProfile.GetStrategy(node)
 	key := node.InfoSet(player).Key()
 
 	i, ok := sampledActions[key]
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		policy := c.slicePool.alloc(node.NumChildren())
-		policy = strat.GetPolicy(policy)
+		policy := c.strategyProfile.GetPolicy(node)
 		i = sampleOne(policy)
-		c.slicePool.free(policy)
 		sampledActions[key] = i
+	}
+
+	// Update average strategy for this node.
+	// We perform "stochastic" updates as described in the MC-CFR paper.
+	if sampleProb > 0 {
+		c.strategyProfile.AddStrategyWeight(node, 1.0/sampleProb)
 	}
 
 	child := node.GetChild(i)

@@ -177,23 +177,23 @@ type cfrImpl interface {
 
 func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
 	root := runCFR(t, opt, policy, nIter)
-	seen := make(map[cfr.NodeStrategy]struct{})
+	seen := make(map[string]struct{})
 	tree.Visit(root, func(node cfr.GameTreeNode) {
 		if node.Type() != cfr.PlayerNode {
 			return
 		}
 
-		strat := policy.GetStrategy(node)
-		if _, ok := seen[strat]; ok {
+		key := node.InfoSet(node.Player()).Key()
+		if _, ok := seen[key]; ok {
 			return
 		}
 
-		actionProbs := strat.GetAverageStrategy()
+		actionProbs := policy.GetAverageStrategy(node)
 		if actionProbs != nil {
 			t.Logf("%6s: check=%.2f bet=%.2f", node, actionProbs[0], actionProbs[1])
 		}
 
-		seen[strat] = struct{}{}
+		seen[key] = struct{}{}
 	})
 }
 
@@ -294,8 +294,8 @@ func TestMarshalStrategy(t *testing.T) {
 			return
 		}
 
-		p1 := policy.GetStrategy(node).GetPolicy(nil)
-		p2 := reloaded.GetStrategy(node).GetPolicy(nil)
+		p1 := policy.GetPolicy(node)
+		p2 := reloaded.GetPolicy(node)
 		if len(p1) != len(p2) {
 			t.Errorf("expected %v, got %v", p1, p2)
 		} else {
@@ -307,8 +307,8 @@ func TestMarshalStrategy(t *testing.T) {
 			}
 		}
 
-		avgStrat1 := policy.GetStrategy(node).GetAverageStrategy()
-		avgStrat2 := reloaded.GetStrategy(node).GetAverageStrategy()
+		avgStrat1 := policy.GetAverageStrategy(node)
+		avgStrat2 := reloaded.GetAverageStrategy(node)
 		if !reflect.DeepEqual(avgStrat1, avgStrat2) {
 			t.Errorf("expected %v, got %v", avgStrat1, avgStrat2)
 		}

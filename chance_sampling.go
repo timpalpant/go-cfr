@@ -48,14 +48,11 @@ func (c *ChanceSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, 
 func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1 float32) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
-	strat := c.strategyProfile.GetStrategy(node)
-	policy := c.slicePool.alloc(nChildren)
-	defer c.slicePool.free(policy)
-	policy = strat.GetPolicy(policy)
+	policy := c.strategyProfile.GetPolicy(node)
 
-	advantages := c.slicePool.alloc(nChildren)
-	defer c.slicePool.free(advantages)
-	var expectedUtil float32
+	regrets := c.slicePool.alloc(nChildren)
+	defer c.slicePool.free(regrets)
+	var cfValue float32
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
 		p := policy[i]
@@ -66,18 +63,19 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 			util = c.runHelper(child, player, reachP0, p*reachP1)
 		}
 
-		advantages[i] = util
-		expectedUtil += p * util
+		regrets[i] = util
+		cfValue += p * util
 	}
 
-	// Transform action utilities into instantaneous advantages by
+	// Transform action utilities into instantaneous regrets by
 	// subtracting out the expected utility over all possible actions.
-	f32.AddConst(-expectedUtil, advantages)
-	reachP := reachProb(player, reachP0, reachP1, 1.0)
+	f32.AddConst(-cfValue, regrets)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, 1.0)
-	f32.ScalUnitary(counterFactualP, advantages)
-	strat.AddRegret(reachP, advantages)
-	return expectedUtil
+	f32.ScalUnitary(counterFactualP, regrets)
+	c.strategyProfile.AddRegret(node, regrets)
+	reachP := reachProb(player, reachP0, reachP1, 1.0)
+	c.strategyProfile.AddStrategyWeight(node, reachP)
+	return cfValue
 }
 
 // Sample one child of the given Chance node, according to its probability distribution.

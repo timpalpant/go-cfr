@@ -66,10 +66,7 @@ func (c *RobustSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float
 func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
-	strat := c.strategyProfile.GetStrategy(node)
-	policy := c.slicePool.alloc(nChildren)
-	defer c.slicePool.free(policy)
-	policy = strat.GetPolicy(policy)
+	policy := c.strategyProfile.GetPolicy(node)
 
 	// Sample min(k, |A|) actions with uniform probability.
 	selected := arange(nChildren)
@@ -82,22 +79,23 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	}
 
 	q := 1.0 / float32(nChildren)
-	advantages := c.slicePool.alloc(nChildren)
-	defer c.slicePool.free(advantages)
-	var expectedUtil float32
+	regrets := c.slicePool.alloc(nChildren)
+	defer c.slicePool.free(regrets)
+	var cfValue float32
 	for _, i := range selected {
 		child := node.GetChild(i)
 		p := policy[i]
 		util := c.runHelper(child, player, q*sampleProb, traversingPlayer, sampledActions)
-		advantages[i] = util
-		expectedUtil += p * util
+		regrets[i] = util
+		cfValue += p * util
 	}
 
-	// Transform action utilities into instantaneous advantages by
+	// Transform action utilities into instantaneous regrets by
 	// subtracting out the expected utility over all possible actions.
-	f32.AddConst(-expectedUtil, advantages)
-	strat.AddRegret(sampleProb, advantages)
-	return expectedUtil
+	f32.AddConst(-cfValue, regrets)
+	f32.ScalUnitary(1.0/q, regrets)
+	c.strategyProfile.AddRegret(node, regrets)
+	return cfValue
 }
 
 func min(i, j int) int {
@@ -112,19 +110,20 @@ func min(i, j int) int {
 // Save selected action so that they are reused if this infoset is hit again.
 func (c *RobustSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
-	strat := c.strategyProfile.GetStrategy(node)
 	key := node.InfoSet(player).Key()
 
 	i, ok := sampledActions[key]
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		policy := c.slicePool.alloc(node.NumChildren())
-		policy = strat.GetPolicy(policy)
+		policy := c.strategyProfile.GetPolicy(node)
 		i = sampleOne(policy)
-		c.slicePool.free(policy)
 		sampledActions[key] = i
 	}
+
+	// Update average strategy for this node.
+	// We perform "stochastic" updates as described in the MC-CFR paper.
+	c.strategyProfile.AddStrategyWeight(node, 1.0/sampleProb)
 
 	child := node.GetChild(i)
 	// Sampling probabilities cancel out in the calculation of counterfactual value,

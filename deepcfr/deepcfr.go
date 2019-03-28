@@ -10,7 +10,7 @@ import (
 type Sample struct {
 	InfoSet    cfr.InfoSet
 	Advantages []float32
-	Iter       int
+	Weight     float32
 }
 
 // Buffer collects samples of infoset action advantages to train a Model.
@@ -30,7 +30,7 @@ type TrainedModel interface {
 	Predict(infoSet cfr.InfoSet, nActions int) (advantages []float32)
 }
 
-// DeepCFR implements cfr.NodeStrategyStore, and uses function approximation
+// DeepCFR implements cfr.StrategyProfile, and uses function approximation
 // to estimate strategies rather than accumulation of regrets for all
 // infosets. This can be more tractable for large games where storing
 // all of the regrets for all infosets is impractical.
@@ -66,18 +66,33 @@ func (d *DeepCFR) currentModel(player int) TrainedModel {
 	return playerModels[len(playerModels)-1]
 }
 
-// GetStrategy implements cfr.StrategyProfile.
-func (d *DeepCFR) GetStrategy(node cfr.GameTreeNode) cfr.NodeStrategy {
-	infoSet := node.InfoSet(node.Player())
+func (d *DeepCFR) AddRegret(node cfr.GameTreeNode, instantaneousRegrets []float32) {
+	buf := d.buffers[node.Player()]
+	buf.AddSample(Sample{
+		InfoSet:    node.InfoSet(node.Player()),
+		Advantages: append([]float32(nil), instantaneousRegrets...),
+		Weight:     float32(d.iter),
+	})
+}
 
-	return dCFRPolicy{
-		buf:           d.buffers[node.Player()],
-		infoSet:       infoSet,
-		iter:          d.iter,
-		trainedModels: d.trainedModels[node.Player()],
-		currentModel:  d.currentModel(node.Player()),
-		nActions:      node.NumChildren(),
+func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) []float32 {
+	var strategy []float32
+	currentModel := d.currentModel(node.Player())
+	if currentModel == nil {
+		strategy = uniformDist(node.NumChildren())
+	} else {
+		infoSet := node.InfoSet(node.Player())
+		strategy = currentModel.Predict(infoSet, node.NumChildren())
 	}
+
+	return strategy
+}
+
+func (d *DeepCFR) AddStrategyWeight(node cfr.GameTreeNode, w float32) {
+}
+
+func (d *DeepCFR) GetAverageStrategy(node cfr.GameTreeNode) []float32 {
+	return nil
 }
 
 // Update implements cfr.StrategyProfile.
@@ -93,43 +108,6 @@ func (d *DeepCFR) Update() {
 // Iter implements cfr.StrategyProfile.
 func (d *DeepCFR) Iter() int {
 	return d.iter
-}
-
-type dCFRPolicy struct {
-	buf           Buffer
-	infoSet       cfr.InfoSet
-	iter          int
-	trainedModels []TrainedModel
-	currentModel  TrainedModel
-	nActions      int
-}
-
-// GetActionProbability implements cfr.NodeStrategy.
-func (p dCFRPolicy) GetPolicy(_ []float32) []float32 {
-	var strategy []float32
-	if p.currentModel == nil {
-		strategy = uniformDist(p.nActions)
-	} else {
-		strategy = p.currentModel.Predict(p.infoSet, p.nActions)
-	}
-
-	return strategy
-}
-
-// AddRegret implements cfr.NodeStrategy.
-func (p dCFRPolicy) AddRegret(reachP float32, advantages []float32) {
-	p.buf.AddSample(Sample{
-		InfoSet:    p.infoSet,
-		Advantages: append([]float32(nil), advantages...),
-		Iter:       p.iter,
-	})
-}
-
-// GetAverageStrategy implements cfr.NodeStrategy.
-func (p dCFRPolicy) GetAverageStrategy() []float32 {
-	// We calculate the average strategy as in Single Deep CFR:
-	// https://arxiv.org/pdf/1901.07621.pdf.
-	panic("not yet implemented")
 }
 
 func uniformDist(n int) []float32 {

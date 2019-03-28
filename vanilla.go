@@ -50,13 +50,10 @@ func (c *CFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reach
 func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
-	strat := c.strategyProfile.GetStrategy(node)
-	policy := c.slicePool.alloc(nChildren)
-	policy = strat.GetPolicy(policy)
-	defer c.slicePool.free(policy)
-	advantages := c.slicePool.alloc(nChildren)
-	defer c.slicePool.free(advantages)
-	var expectedUtil float32
+	policy := c.strategyProfile.GetPolicy(node)
+	regrets := c.slicePool.alloc(nChildren)
+	defer c.slicePool.free(regrets)
+	var cfValue float32
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
 		p := policy[i]
@@ -67,18 +64,19 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 			util = c.runHelper(child, player, reachP0, p*reachP1, reachChance)
 		}
 
-		advantages[i] = util
-		expectedUtil += p * util
+		regrets[i] = util
+		cfValue += p * util
 	}
 
-	// Transform action utilities into instantaneous advantages by
+	// Transform action utilities into instantaneous regrets by
 	// subtracting out the expected utility over all possible actions.
-	f32.AddConst(-expectedUtil, advantages)
-	reachP := reachProb(player, reachP0, reachP1, reachChance)
+	f32.AddConst(-cfValue, regrets)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
-	f32.ScalUnitary(counterFactualP, advantages)
-	strat.AddRegret(reachP, advantages)
-	return expectedUtil
+	f32.ScalUnitary(counterFactualP, regrets)
+	c.strategyProfile.AddRegret(node, regrets)
+	reachP := reachProb(player, reachP0, reachP1, reachChance)
+	c.strategyProfile.AddStrategyWeight(node, reachP)
+	return cfValue
 }
 
 func getSign(player1, player2 int) float32 {

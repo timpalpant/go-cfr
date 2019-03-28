@@ -53,26 +53,23 @@ type GameTreeNode interface {
 	Utility(player int) float64
 }
 
-// NodeStrategy learns a strategy for play at a given GameTreeNode.
-type NodeStrategy interface {
-	// GetPolicy gets the vector of probabilities with which the ith
+// StrategyProfile maintains a collection of regret-matching policies for each
+// player node in the game tree.
+type StrategyProfile interface {
+	// AddRegret provides new observed instantaneous regrets
+	// to add to the total accumulated regret.
+	AddRegret(node GameTreeNode, instantaneousRegrets []float32)
+	// GetPolicy gets the current vector of probabilities with which the ith
 	// available action should be played.
 	//
 	// If the provided slice is not nil, it will be used and extended
-	// to the necessary capacity.
-	GetPolicy(p []float32) []float32
-	// AddRegret provides new observed instantaneous regrets (with probability p)
-	// to add to the total accumulated regret.
-	AddRegret(reachP float32, instantaneousRegrets []float32)
+	// to the necessary capacity (to allow reuse).
+	GetPolicy(node GameTreeNode) []float32
+	// AddStrategyWeight adds the current strategy with weight w to the average.
+	AddStrategyWeight(node GameTreeNode, w float32)
 	// GetAverageStrategy returns the average strategy over all iterations.
-	GetAverageStrategy() []float32
-}
+	GetAverageStrategy(node GameTreeNode) []float32
 
-// StrategyProfile maintains a collection of NodeStrategy for each node that
-// is visited in a traversal of the game tree.
-type StrategyProfile interface {
-	// GetStrategy returns the NodeStrategy for the given GameTreeNode.
-	GetStrategy(GameTreeNode) NodeStrategy
 	// Calculate the next strategy profile for all visited nodes.
 	Update()
 	// Get the current iteration (number of times update has been called).

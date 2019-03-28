@@ -24,13 +24,8 @@ func LoadStrategyTable(r io.Reader) (*StrategyTable, error) {
 		return nil, err
 	}
 
-	strategies := make(map[string]updateableNodeStrategy, nStrategies)
+	strategies := make(map[string]*strategy, nStrategies)
 	for i := int64(0); i < nStrategies; i++ {
-		var keyLen int64
-		if err := dec.Decode(&keyLen); err != nil {
-			return nil, err
-		}
-
 		var key string
 		if err := dec.Decode(&key); err != nil {
 			return nil, err
@@ -67,10 +62,6 @@ func (st *StrategyTable) MarshalTo(w io.Writer) error {
 	}
 
 	for key, s := range st.strategies {
-		if err := enc.Encode(len(key)); err != nil {
-			return err
-		}
-
 		if err := enc.Encode(key); err != nil {
 			return err
 		}
@@ -104,6 +95,8 @@ func (s *strategy) GobDecode(buf []byte) error {
 
 	s.regretSum = regretSum
 	s.strategySum = strategySum
+	s.currentStrategy = make([]float32, nActions)
+	s.regretMatching()
 	return nil
 }
 
