@@ -10,6 +10,7 @@ import (
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/kuhn"
+	"github.com/timpalpant/go-cfr/tree"
 )
 
 func TestVanilla(t *testing.T) {
@@ -24,7 +25,7 @@ func TestVanilla(t *testing.T) {
 
 	policy := New(db, cfr.DiscountParams{})
 	opt := cfr.New(policy)
-	runCFR(t, opt, policy, 10000)
+	testCFR(t, opt, policy, 1000)
 }
 
 func BenchmarkVanilla(b *testing.B) {
@@ -50,6 +51,28 @@ type logger interface {
 
 type cfrImpl interface {
 	Run(cfr.GameTreeNode) float32
+}
+
+func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
+	root := runCFR(t, opt, policy, nIter)
+	seen := make(map[string]struct{})
+	tree.Visit(root, func(node cfr.GameTreeNode) {
+		if node.Type() != cfr.PlayerNode {
+			return
+		}
+
+		key := node.InfoSet(node.Player()).Key()
+		if _, ok := seen[key]; ok {
+			return
+		}
+
+		actionProbs := policy.GetPolicy(node).GetAverageStrategy()
+		if actionProbs != nil {
+			t.Logf("%6s: check=%.2f bet=%.2f", node, actionProbs[0], actionProbs[1])
+		}
+
+		seen[key] = struct{}{}
+	})
 }
 
 func runCFR(log logger, opt cfrImpl, policy cfr.StrategyProfile, nIter int) cfr.GameTreeNode {

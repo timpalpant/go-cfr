@@ -82,6 +82,8 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 		if err := policy.GobDecode(buf); err != nil {
 			panic(err)
 		}
+
+		glog.Infof("Loaded policy: %v", policy)
 	}
 
 	return &ldbPolicy{
@@ -100,6 +102,7 @@ type ldbPolicy struct {
 }
 
 func (l *ldbPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
+	glog.Infof("Adding regret %v with weight %v", instantaneousRegrets, w)
 	l.Policy.AddRegret(w, instantaneousRegrets)
 	l.save()
 }
@@ -110,6 +113,7 @@ func (l *ldbPolicy) AddStrategyWeight(w float32) {
 }
 
 func (l *ldbPolicy) save() {
+	glog.Infof("Saving policy: %v", l.Policy)
 	buf, err := l.Policy.GobEncode()
 	if err != nil {
 		panic(err)

@@ -59,7 +59,7 @@ func (p *Policy) NextStrategy(discountPositiveRegret, discountNegativeRegret, di
 }
 
 func (p *Policy) AddRegret(w float32, instantaneousRegrets []float32) {
-	f32.AxpyUnitary(w, p.regretSum, instantaneousRegrets)
+	f32.AxpyUnitary(w, instantaneousRegrets, p.regretSum)
 }
 
 func (p *Policy) AddStrategyWeight(w float32) {
