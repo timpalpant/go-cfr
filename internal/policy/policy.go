@@ -106,25 +106,22 @@ func (p *Policy) GobDecode(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
-	var nActions int
-	if err := dec.Decode(&nActions); err != nil {
+	if err := dec.Decode(&p.currentStrategyWeight); err != nil {
 		return err
 	}
 
-	regretSum := make([]float32, 0, nActions)
-	if err := dec.Decode(&regretSum); err != nil {
+	if err := dec.Decode(&p.currentStrategy); err != nil {
 		return err
 	}
 
-	strategySum := make([]float32, 0, nActions)
-	if err := dec.Decode(&strategySum); err != nil {
+	if err := dec.Decode(&p.regretSum); err != nil {
 		return err
 	}
 
-	p.regretSum = regretSum
-	p.strategySum = strategySum
-	p.currentStrategy = make([]float32, nActions)
-	p.regretMatching()
+	if err := dec.Decode(&p.strategySum); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -132,7 +129,11 @@ func (p *Policy) GobEncode() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
-	if err := enc.Encode(p.NumActions()); err != nil {
+	if err := enc.Encode(p.currentStrategyWeight); err != nil {
+		return nil, err
+	}
+
+	if err := enc.Encode(p.currentStrategy); err != nil {
 		return nil, err
 	}
 

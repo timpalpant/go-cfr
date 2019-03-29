@@ -22,22 +22,43 @@ func TestVanilla(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	policy := New(db)
+	policy := New(db, cfr.DiscountParams{})
 	opt := cfr.New(policy)
 	runCFR(t, opt, policy, 10000)
+}
+
+func BenchmarkVanilla(b *testing.B) {
+	tmpDir, err := ioutil.TempDir("", "cfr-test-")
+	defer os.RemoveAll(tmpDir)
+
+	opts := &opt.Options{}
+	db, err := leveldb.OpenFile(tmpDir, opts)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	policy := New(db, cfr.DiscountParams{})
+	opt := cfr.New(policy)
+
+	b.ResetTimer()
+	runCFR(b, opt, policy, b.N)
+}
+
+type logger interface {
+	Logf(string, ...interface{})
 }
 
 type cfrImpl interface {
 	Run(cfr.GameTreeNode) float32
 }
 
-func runCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) cfr.GameTreeNode {
+func runCFR(log logger, opt cfrImpl, policy cfr.StrategyProfile, nIter int) cfr.GameTreeNode {
 	root := kuhn.NewGame()
 	var expectedValue float32
 	for i := 1; i <= nIter; i++ {
 		expectedValue += opt.Run(root)
 		if nIter/10 > 0 && i%(nIter/10) == 0 {
-			t.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
+			log.Logf("[iter=%d] Expected game value: %.4f", i, expectedValue/float32(i))
 		}
 
 		policy.Update()

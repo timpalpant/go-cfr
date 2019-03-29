@@ -6,38 +6,28 @@
 package ldbpolicy
 
 import (
-	"encoding/binary"
-	"fmt"
-	"math"
-
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
-	"github.com/syndtr/goleveldb/leveldb/util"
 
 	"github.com/timpalpant/go-cfr"
-	"github.com/timpalpant/go-cfr/internal/f32"
-)
-
-const (
-	regretPrefix          = "rs:"
-	currentStrategyPrefix = "cs:"
-	strategySumPrefix     = "ss:"
-	strategyWeightPrefix  = "sw:"
+	"github.com/timpalpant/go-cfr/internal/policy"
 )
 
 type PolicyTable struct {
-	iter int
+	params cfr.DiscountParams
+	iter   int
 
 	db    *leveldb.DB
 	rOpts *opt.ReadOptions
 	wOpts *opt.WriteOptions
 }
 
-func New(db *leveldb.DB) *PolicyTable {
+func New(db *leveldb.DB, params cfr.DiscountParams) *PolicyTable {
 	return &PolicyTable{
-		iter: 1,
-		db:   db,
+		params: params,
+		iter:   1,
+		db:     db,
 	}
 }
 
@@ -50,65 +40,25 @@ func (pt *PolicyTable) Iter() int {
 }
 
 func (pt *PolicyTable) Update() {
-	iter := pt.db.NewIterator(util.BytesPrefix([]byte(regretPrefix)), pt.rOpts)
+	discountPos, discountNeg, discountSum := pt.params.GetDiscountFactors(pt.iter)
+	iter := pt.db.NewIterator(nil, pt.rOpts)
 	n := 0
 	for iter.Next() {
-		rsKey := string(iter.Key())
-		regretSum := decodeF32s(iter.Value())
-		key := rsKey[len(regretPrefix):]
-
-		wKey := strategyWeightPrefix + key
-		wBuf, err := pt.db.Get([]byte(wKey), pt.rOpts)
-		var w float32
-		if err != nil {
-			if err != leveldb.ErrNotFound {
-				panic(err)
-			}
-		} else {
-			wBits := binary.LittleEndian.Uint32(wBuf)
-			w = math.Float32frombits(wBits)
-		}
-
-		ssKey := strategySumPrefix + key
-		buf, err := pt.db.Get([]byte(ssKey), pt.rOpts)
-		var strategySum []float32
-		if err != nil {
-			if err != leveldb.ErrNotFound {
-				panic(err)
-			}
-
-			strategySum = make([]float32, len(regretSum))
-		} else {
-			strategySum = decodeF32s(buf)
-		}
-
-		csKey := currentStrategyPrefix + key
-		buf, err = pt.db.Get([]byte(csKey), pt.rOpts)
-		var currentStrategy []float32
-		if err != nil {
-			if err != leveldb.ErrNotFound {
-				panic(err)
-			}
-
-			currentStrategy = uniformDist(len(regretSum))
-		} else {
-			currentStrategy = decodeF32s(buf)
-		}
-
-		f32.AxpyUnitary(w, currentStrategy, strategySum)
-
-		buf = encodeF32s(strategySum)
-		if err := pt.db.Put([]byte(ssKey), buf, pt.wOpts); err != nil {
-			panic(err)
-		}
-
-		currentStrategy = regretMatching(regretSum)
-		buf = encodeF32s(currentStrategy)
-		if err := pt.db.Put([]byte(csKey), buf, pt.wOpts); err != nil {
-			panic(err)
-		}
-
 		n++
+		var policy policy.Policy
+		if err := policy.GobDecode(iter.Value()); err != nil {
+			panic(err)
+		}
+
+		policy.NextStrategy(discountPos, discountNeg, discountSum)
+		buf, err := policy.GobEncode()
+		if err != nil {
+			panic(err)
+		}
+
+		if err := pt.db.Put(iter.Key(), buf, pt.wOpts); err != nil {
+			panic(err)
+		}
 	}
 
 	iter.Release()
@@ -121,157 +71,51 @@ func (pt *PolicyTable) Update() {
 }
 
 func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
-	return &ldbPolicy{
-		key:      node.InfoSet(node.Player()).Key(),
-		nActions: node.NumChildren(),
-		db:       pt.db,
-		rOpts:    pt.rOpts,
-		wOpts:    pt.wOpts,
-	}
-}
-
-type ldbPolicy struct {
-	key      string
-	nActions int
-
-	db    *leveldb.DB
-	rOpts *opt.ReadOptions
-	wOpts *opt.WriteOptions
-}
-
-func (l *ldbPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	key := regretPrefix + l.key
-	regretSum := l.getFloatSlice(key)
-	f32.AxpyUnitary(w, regretSum, instantaneousRegrets)
-	l.putFloatSlice(key, regretSum)
-}
-
-func (l *ldbPolicy) GetStrategy() []float32 {
-	key := currentStrategyPrefix + l.key
-	s := l.getFloatSlice(key)
-	if len(s) == 0 {
-		return uniformDist(l.nActions)
-	}
-
-	return s
-}
-
-func (l *ldbPolicy) AddStrategyWeight(w float32) {
-	key := strategyWeightPrefix + l.key
-	buf, err := l.db.Get([]byte(key), l.rOpts)
+	key := []byte(node.InfoSet(node.Player()).Key())
+	buf, err := pt.db.Get(key, pt.rOpts)
+	policy := policy.New(node.NumChildren())
 	if err != nil {
 		if err != leveldb.ErrNotFound {
 			panic(err)
 		}
-
-		buf = make([]byte, 4)
 	} else {
-		bits := binary.LittleEndian.Uint32(buf)
-		w += math.Float32frombits(bits)
-	}
-
-	bits := math.Float32bits(w)
-	binary.LittleEndian.PutUint32(buf, bits)
-	if err := l.db.Put([]byte(key), buf, l.wOpts); err != nil {
-		panic(err)
-	}
-}
-
-func (l *ldbPolicy) GetAverageStrategy() []float32 {
-	key := strategySumPrefix + l.key
-	strategySum := l.getFloatSlice(key)
-	if len(strategySum) > 0 {
-		total := f32.Sum(strategySum)
-		if total > 0 {
-			f32.ScalUnitary(1.0/total, strategySum)
-			return strategySum
-		} else {
-			for i := range strategySum {
-				strategySum[i] = 1.0 / float32(len(strategySum))
-			}
+		if err := policy.GobDecode(buf); err != nil {
+			panic(err)
 		}
-	} else {
-		strategySum = uniformDist(l.nActions)
 	}
 
-	return strategySum
-}
-
-func (l *ldbPolicy) getFloatSlice(key string) []float32 {
-	buf, err := l.db.Get([]byte(key), l.rOpts)
-	if err != nil {
-		if err == leveldb.ErrNotFound {
-			return nil
-		}
-
-		panic(err)
+	return &ldbPolicy{
+		Policy: policy,
+		db:     pt.db,
+		key:    key,
+		wOpts:  pt.wOpts,
 	}
-
-	return decodeF32s(buf)
 }
 
-func (l *ldbPolicy) putFloatSlice(key string, v []float32) {
-	buf := encodeF32s(v)
-	err := l.db.Put([]byte(key), buf, l.wOpts)
+type ldbPolicy struct {
+	*policy.Policy
+	db    *leveldb.DB
+	key   []byte
+	wOpts *opt.WriteOptions
+}
+
+func (l *ldbPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
+	l.Policy.AddRegret(w, instantaneousRegrets)
+	l.save()
+}
+
+func (l *ldbPolicy) AddStrategyWeight(w float32) {
+	l.Policy.AddStrategyWeight(w)
+	l.save()
+}
+
+func (l *ldbPolicy) save() {
+	buf, err := l.Policy.GobEncode()
 	if err != nil {
 		panic(err)
 	}
-}
 
-// TODO: Implement compression when encoding/decoding.
-func encodeF32s(v []float32) []byte {
-	result := make([]byte, 4*len(v))
-	for i, v := range v {
-		bits := math.Float32bits(v)
-		buf := result[4*i : 4*(i+1)]
-		binary.LittleEndian.PutUint32(buf, bits)
+	if err := l.db.Put(l.key, buf, l.wOpts); err != nil {
+		panic(err)
 	}
-
-	return result
-}
-
-func decodeF32s(buf []byte) []float32 {
-	if len(buf)%4 != 0 {
-		panic(fmt.Errorf("invalid encoded buffer of floats has len %d", len(buf)))
-	}
-
-	n := len(buf) / 4
-	result := make([]float32, n)
-	for i := 0; i < n; i++ {
-		b := buf[4*i : 4*(i+1)]
-		bits := binary.LittleEndian.Uint32(b)
-		x := math.Float32frombits(bits)
-		result[i] = x
-	}
-
-	return result
-}
-
-func uniformDist(n int) []float32 {
-	result := make([]float32, n)
-	p := 1.0 / float32(n)
-	f32.AddConst(p, result)
-	return result
-}
-
-func makePositive(v []float32) {
-	for i := range v {
-		if v[i] < 0 {
-			v[i] = 0.0
-		}
-	}
-}
-
-func regretMatching(regretSum []float32) []float32 {
-	makePositive(regretSum)
-	total := f32.Sum(regretSum)
-	if total > 0 {
-		f32.ScalUnitary(1.0/total, regretSum)
-	} else {
-		for i := range regretSum {
-			regretSum[i] = 1.0 / float32(len(regretSum))
-		}
-	}
-
-	return regretSum
 }
