@@ -12,7 +12,7 @@ import (
 	"github.com/timpalpant/go-cfr/kuhn"
 )
 
-func TestExternalSampling(t *testing.T) {
+func TestVanilla(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "cfr-test-")
 	defer os.RemoveAll(tmpDir)
 
@@ -23,8 +23,8 @@ func TestExternalSampling(t *testing.T) {
 	}
 
 	policy := New(db)
-	opt := cfr.NewExternalSampling(policy)
-	runCFR(t, opt, policy, 100000)
+	opt := cfr.New(policy)
+	runCFR(t, opt, policy, 10000)
 }
 
 type cfrImpl interface {

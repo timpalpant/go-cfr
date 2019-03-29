@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
@@ -50,23 +51,72 @@ func (pt *PolicyTable) Iter() int {
 
 func (pt *PolicyTable) Update() {
 	iter := pt.db.NewIterator(util.BytesPrefix([]byte(regretPrefix)), pt.rOpts)
-	defer iter.Release()
+	n := 0
 	for iter.Next() {
-		key := string(iter.Key())
+		rsKey := string(iter.Key())
 		regretSum := decodeF32s(iter.Value())
-		currentStrategy := regretMatching(regretSum)
-		csKey := currentStrategyPrefix + key[len(regretPrefix):]
-		buf := encodeF32s(currentStrategy)
-		err := pt.db.Put([]byte(csKey), buf, pt.wOpts)
+		key := rsKey[len(regretPrefix):]
+
+		wKey := strategyWeightPrefix + key
+		wBuf, err := pt.db.Get([]byte(wKey), pt.rOpts)
+		var w float32
 		if err != nil {
+			if err != leveldb.ErrNotFound {
+				panic(err)
+			}
+		} else {
+			wBits := binary.LittleEndian.Uint32(wBuf)
+			w = math.Float32frombits(wBits)
+		}
+
+		ssKey := strategySumPrefix + key
+		buf, err := pt.db.Get([]byte(ssKey), pt.rOpts)
+		var strategySum []float32
+		if err != nil {
+			if err != leveldb.ErrNotFound {
+				panic(err)
+			}
+
+			strategySum = make([]float32, len(regretSum))
+		} else {
+			strategySum = decodeF32s(buf)
+		}
+
+		csKey := currentStrategyPrefix + key
+		buf, err = pt.db.Get([]byte(csKey), pt.rOpts)
+		var currentStrategy []float32
+		if err != nil {
+			if err != leveldb.ErrNotFound {
+				panic(err)
+			}
+
+			currentStrategy = uniformDist(len(regretSum))
+		} else {
+			currentStrategy = decodeF32s(buf)
+		}
+
+		f32.AxpyUnitary(w, currentStrategy, strategySum)
+
+		buf = encodeF32s(strategySum)
+		if err := pt.db.Put([]byte(ssKey), buf, pt.wOpts); err != nil {
 			panic(err)
 		}
+
+		currentStrategy = regretMatching(regretSum)
+		buf = encodeF32s(currentStrategy)
+		if err := pt.db.Put([]byte(csKey), buf, pt.wOpts); err != nil {
+			panic(err)
+		}
+
+		n++
 	}
 
+	iter.Release()
 	if err := iter.Error(); err != nil {
 		panic(err)
 	}
 
+	glog.V(1).Infof("Updated %d strategies", n)
 	pt.iter++
 }
 
@@ -78,20 +128,6 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 		rOpts:    pt.rOpts,
 		wOpts:    pt.wOpts,
 	}
-}
-
-func regretMatching(regretSum []float32) []float32 {
-	makePositive(regretSum)
-	total := f32.Sum(regretSum)
-	if total > 0 {
-		f32.ScalUnitary(1.0/total, regretSum)
-	} else {
-		for i := range regretSum {
-			regretSum[i] = 1.0 / float32(len(regretSum))
-		}
-	}
-
-	return regretSum
 }
 
 type ldbPolicy struct {
@@ -224,4 +260,18 @@ func makePositive(v []float32) {
 			v[i] = 0.0
 		}
 	}
+}
+
+func regretMatching(regretSum []float32) []float32 {
+	makePositive(regretSum)
+	total := f32.Sum(regretSum)
+	if total > 0 {
+		f32.ScalUnitary(1.0/total, regretSum)
+	} else {
+		for i := range regretSum {
+			regretSum[i] = 1.0 / float32(len(regretSum))
+		}
+	}
+
+	return regretSum
 }
