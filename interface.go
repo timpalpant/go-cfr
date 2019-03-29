@@ -1,7 +1,5 @@
 package cfr
 
-import "io"
-
 // NodeType is the type of node in an extensive-form game tree.
 type NodeType int
 
@@ -55,25 +53,29 @@ type GameTreeNode interface {
 
 // StrategyProfile maintains a collection of regret-matching policies for each
 // player node in the game tree.
+//
+// The policytable and deepcfr packages provide implementations of StrategyProfile.
 type StrategyProfile interface {
-	// AddRegret provides new observed instantaneous regrets
-	// to add to the total accumulated regret.
-	AddRegret(node GameTreeNode, instantaneousRegrets []float32)
-	// GetPolicy gets the current vector of probabilities with which the ith
-	// available action should be played.
-	//
-	// If the provided slice is not nil, it will be used and extended
-	// to the necessary capacity (to allow reuse).
-	GetPolicy(node GameTreeNode) []float32
-	// AddStrategyWeight adds the current strategy with weight w to the average.
-	AddStrategyWeight(node GameTreeNode, w float32)
-	// GetAverageStrategy returns the average strategy over all iterations.
-	GetAverageStrategy(node GameTreeNode) []float32
+	// GetPolicy returns the NodePolicy for the given node.
+	GetPolicy(node GameTreeNode) NodePolicy
 
 	// Calculate the next strategy profile for all visited nodes.
 	Update()
 	// Get the current iteration (number of times update has been called).
 	Iter() int
-	// Serialize the current state of the strategy profile to the given io.Writer.
-	MarshalTo(w io.Writer) error
+}
+
+// NodePolicy maintains the action policy for a single Player node.
+type NodePolicy interface {
+	// AddRegret provides new observed instantaneous regrets
+	// to add to the total accumulated regret.
+	AddRegret(instantaneousRegrets []float32)
+	// GetStrategy gets the current vector of probabilities with which the ith
+	// available action should be played.
+	GetStrategy() []float32
+
+	// AddStrategyWeight adds the current strategy with weight w to the average.
+	AddStrategyWeight(w float32)
+	// GetAverageStrategy returns the average strategy over all iterations.
+	GetAverageStrategy() []float32
 }

@@ -49,13 +49,14 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 	player := node.Player()
 	nChildren := node.NumChildren()
 	policy := c.strategyProfile.GetPolicy(node)
+	strategy := policy.GetStrategy()
 
 	regrets := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(regrets)
 	var cfValue float32
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
-		p := policy[i]
+		p := strategy[i]
 		var util float32
 		if player == 0 {
 			util = c.runHelper(child, player, p*reachP0, reachP1)
@@ -72,9 +73,9 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 	f32.AddConst(-cfValue, regrets)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, 1.0)
 	f32.ScalUnitary(counterFactualP, regrets)
-	c.strategyProfile.AddRegret(node, regrets)
+	policy.AddRegret(regrets)
 	reachP := reachProb(player, reachP0, reachP1, 1.0)
-	c.strategyProfile.AddStrategyWeight(node, reachP)
+	policy.AddStrategyWeight(reachP)
 	return cfValue
 }
 

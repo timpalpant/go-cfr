@@ -34,31 +34,31 @@ func TestPoker_InfoSets(t *testing.T) {
 }
 
 func TestPoker_VanillaCFR(t *testing.T) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.New(policy)
 	testCFR(t, opt, policy, 10000)
 }
 
 func TestPoker_ChanceSamplingCFR(t *testing.T) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.NewChanceSampling(policy)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_ExternalSamplingCFR(t *testing.T) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.NewExternalSampling(policy)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_OutcomeSamplingCFR(t *testing.T) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.NewOutcomeSampling(policy, 0.05)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_AverageStrategySamplingCFR(t *testing.T) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	params := cfr.ASSamplingParams{
 		Epsilon: 0.05,
 		Beta:    1000000,
@@ -69,21 +69,21 @@ func TestPoker_AverageStrategySamplingCFR(t *testing.T) {
 }
 
 func TestPoker_RobustSamplingCFR(t *testing.T) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.NewRobustSampling(policy, 1)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_CFRPlus(t *testing.T) {
 	plus := cfr.DiscountParams{UseRegretMatchingPlus: true}
-	policy := cfr.NewStrategyTable(plus)
+	policy := cfr.NewPolicyTable(plus)
 	opt := cfr.NewExternalSampling(policy)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_LinearCFR(t *testing.T) {
 	linear := cfr.DiscountParams{LinearWeighting: true}
-	policy := cfr.NewStrategyTable(linear)
+	policy := cfr.NewPolicyTable(linear)
 	opt := cfr.NewExternalSampling(policy)
 	testCFR(t, opt, policy, 200000)
 }
@@ -98,34 +98,34 @@ func TestPoker_DiscountedCFR(t *testing.T) {
 		DiscountGamma: 2.0,
 	}
 
-	policy := cfr.NewStrategyTable(abg)
+	policy := cfr.NewPolicyTable(abg)
 	opt := cfr.New(policy)
 	testCFR(t, opt, policy, 10000)
 }
 
 func BenchmarkPoker_VanillaCFR(b *testing.B) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.New(policy)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
 }
 
 func BenchmarkPoker_ChanceSamplingCFR(b *testing.B) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.NewChanceSampling(policy)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
 }
 
 func BenchmarkPoker_ExternalSamplingCFR(b *testing.B) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.NewExternalSampling(policy)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
 }
 
 func BenchmarkPoker_AverageStrategySamplingCFR(b *testing.B) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	params := cfr.ASSamplingParams{
 		Epsilon: 0.05,
 		Beta:    1000000,
@@ -137,35 +137,7 @@ func BenchmarkPoker_AverageStrategySamplingCFR(b *testing.B) {
 }
 
 func BenchmarkPoker_OutcomeSamplingCFR(b *testing.B) {
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
-	opt := cfr.NewOutcomeSampling(policy, 0.01)
-	b.ResetTimer()
-	runCFR(b, opt, policy, b.N)
-}
-
-func BenchmarkPoker_ThreadSafeVanillaCFR(b *testing.B) {
-	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
-	opt := cfr.New(policy)
-	b.ResetTimer()
-	runCFR(b, opt, policy, b.N)
-}
-
-func BenchmarkPoker_ThreadSafeChanceSamplingCFR(b *testing.B) {
-	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
-	opt := cfr.NewChanceSampling(policy)
-	b.ResetTimer()
-	runCFR(b, opt, policy, b.N)
-}
-
-func BenchmarkPoker_ThreadSafeExternalSamplingCFR(b *testing.B) {
-	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
-	opt := cfr.NewExternalSampling(policy)
-	b.ResetTimer()
-	runCFR(b, opt, policy, b.N)
-}
-
-func BenchmarkPoker_ThreadSafeOutcomeSamplingCFR(b *testing.B) {
-	policy := cfr.NewThreadSafeStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.NewOutcomeSampling(policy, 0.01)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
@@ -188,7 +160,7 @@ func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
 			return
 		}
 
-		actionProbs := policy.GetAverageStrategy(node)
+		actionProbs := policy.GetPolicy(node).GetAverageStrategy()
 		if actionProbs != nil {
 			t.Logf("%6s: check=%.2f bet=%.2f", node, actionProbs[0], actionProbs[1])
 		}
@@ -260,30 +232,34 @@ func TestPoker_DeepCFR(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := deepCFR.MarshalTo(&buf); err != nil {
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(deepCFR); err != nil {
 		t.Error(err)
 	}
 
-	_, err := deepcfr.Load(&buf)
-	if err != nil {
+	dec := gob.NewDecoder(&buf)
+	var reloaded deepcfr.DeepCFR
+	if err := dec.Decode(&reloaded); err != nil {
 		t.Error(err)
 	}
 }
 
 func TestMarshalStrategy(t *testing.T) {
 	root := NewGame()
-	policy := cfr.NewStrategyTable(cfr.DiscountParams{})
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	opt := cfr.New(policy)
 	opt.Run(root)
 	policy.Update()
 
 	var buf bytes.Buffer
-	if err := policy.MarshalTo(&buf); err != nil {
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(policy); err != nil {
 		t.Error(err)
 	}
 
-	reloaded, err := cfr.LoadStrategyTable(&buf)
-	if err != nil {
+	dec := gob.NewDecoder(&buf)
+	var reloaded cfr.PolicyTable
+	if err := dec.Decode(&reloaded); err != nil {
 		t.Error(err)
 	}
 
@@ -294,8 +270,8 @@ func TestMarshalStrategy(t *testing.T) {
 			return
 		}
 
-		p1 := policy.GetPolicy(node)
-		p2 := reloaded.GetPolicy(node)
+		p1 := policy.GetPolicy(node).GetStrategy()
+		p2 := reloaded.GetPolicy(node).GetStrategy()
 		if len(p1) != len(p2) {
 			t.Errorf("expected %v, got %v", p1, p2)
 		} else {
@@ -307,8 +283,8 @@ func TestMarshalStrategy(t *testing.T) {
 			}
 		}
 
-		avgStrat1 := policy.GetAverageStrategy(node)
-		avgStrat2 := reloaded.GetAverageStrategy(node)
+		avgStrat1 := policy.GetPolicy(node).GetAverageStrategy()
+		avgStrat2 := reloaded.GetPolicy(node).GetAverageStrategy()
 		if !reflect.DeepEqual(avgStrat1, avgStrat2) {
 			t.Errorf("expected %v, got %v", avgStrat1, avgStrat2)
 		}

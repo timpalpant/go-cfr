@@ -76,6 +76,7 @@ func (c *OutcomeSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampl
 	regrets := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(regrets)
 	policy := c.strategyProfile.GetPolicy(node)
+	strategy := policy.GetStrategy()
 
 	// Sample one action according to current strategy profile + exploration.
 	// No need to save since due to perfect recall an infoset will never be revisited.
@@ -83,11 +84,11 @@ func (c *OutcomeSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampl
 	if rand.Float32() < c.explorationDelta {
 		selected = rand.Intn(nChildren)
 	} else {
-		selected = sampleOne(policy)
+		selected = sampleOne(strategy)
 	}
 
 	child := node.GetChild(selected)
-	p := policy[selected]
+	p := strategy[selected]
 
 	f := c.explorationDelta
 	sp := f * (1.0 / float32(nChildren)) // Due to exploration.
@@ -96,7 +97,7 @@ func (c *OutcomeSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampl
 	cfValue := c.runHelper(child, player, sp*sampleProb, traversingPlayer)
 	regrets[selected] = cfValue
 	f32.AddConst(-p*cfValue, regrets)
-	c.strategyProfile.AddRegret(node, regrets)
+	policy.AddRegret(regrets)
 	return p * cfValue
 }
 
@@ -104,11 +105,11 @@ func (c *OutcomeSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampl
 // Save selected action so that they are reused if this infoset is hit again.
 func (c *OutcomeSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int) float32 {
 	policy := c.strategyProfile.GetPolicy(node)
-	selected := sampleOne(policy)
+	selected := sampleOne(policy.GetStrategy())
 
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
-	c.strategyProfile.AddStrategyWeight(node, 1.0/sampleProb)
+	policy.AddStrategyWeight(1.0 / sampleProb)
 
 	child := node.GetChild(selected)
 	// Sampling probabilities cancel out in the calculation of counterfactual value,

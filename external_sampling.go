@@ -63,12 +63,13 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, samp
 	player := node.Player()
 	nChildren := node.NumChildren()
 	policy := c.strategyProfile.GetPolicy(node)
+	strategy := policy.GetStrategy()
 	regrets := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(regrets)
 	var cfValue float32
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
-		p := policy[i]
+		p := strategy[i]
 		regrets[i] = c.runHelper(child, player, p*sampleProb, traversingPlayer, sampledActions)
 		cfValue += p * regrets[i]
 	}
@@ -76,7 +77,7 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, samp
 	if sampleProb > 0 {
 		f32.AddConst(-cfValue, regrets)
 		f32.ScalUnitary(1.0/sampleProb, regrets)
-		c.strategyProfile.AddRegret(node, regrets)
+		policy.AddRegret(regrets)
 	}
 
 	return cfValue
@@ -87,20 +88,20 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, samp
 func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
 	key := node.InfoSet(player).Key()
+	policy := c.strategyProfile.GetPolicy(node)
 
 	i, ok := sampledActions[key]
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		policy := c.strategyProfile.GetPolicy(node)
-		i = sampleOne(policy)
+		i = sampleOne(policy.GetStrategy())
 		sampledActions[key] = i
 	}
 
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
 	if sampleProb > 0 {
-		c.strategyProfile.AddStrategyWeight(node, 1.0/sampleProb)
+		policy.AddStrategyWeight(1.0 / sampleProb)
 	}
 
 	child := node.GetChild(i)

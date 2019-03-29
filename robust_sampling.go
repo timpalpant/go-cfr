@@ -67,6 +67,7 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	player := node.Player()
 	nChildren := node.NumChildren()
 	policy := c.strategyProfile.GetPolicy(node)
+	strategy := policy.GetStrategy()
 
 	// Sample min(k, |A|) actions with uniform probability.
 	selected := arange(nChildren)
@@ -84,7 +85,7 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	var cfValue float32
 	for _, i := range selected {
 		child := node.GetChild(i)
-		p := policy[i]
+		p := strategy[i]
 		util := c.runHelper(child, player, q*sampleProb, traversingPlayer, sampledActions)
 		regrets[i] = util
 		cfValue += p * util
@@ -94,7 +95,7 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	// subtracting out the expected utility over all possible actions.
 	f32.AddConst(-cfValue, regrets)
 	f32.ScalUnitary(1.0/q, regrets)
-	c.strategyProfile.AddRegret(node, regrets)
+	policy.AddRegret(regrets)
 	return cfValue
 }
 
@@ -111,19 +112,19 @@ func min(i, j int) int {
 func (c *RobustSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
 	key := node.InfoSet(player).Key()
+	policy := c.strategyProfile.GetPolicy(node)
 
 	i, ok := sampledActions[key]
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		policy := c.strategyProfile.GetPolicy(node)
-		i = sampleOne(policy)
+		i = sampleOne(policy.GetStrategy())
 		sampledActions[key] = i
 	}
 
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
-	c.strategyProfile.AddStrategyWeight(node, 1.0/sampleProb)
+	policy.AddStrategyWeight(1.0 / sampleProb)
 
 	child := node.GetChild(i)
 	// Sampling probabilities cancel out in the calculation of counterfactual value,

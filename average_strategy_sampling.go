@@ -1,8 +1,10 @@
 package cfr
 
 import (
-	"github.com/timpalpant/go-cfr/internal/f32"
 	"math/rand"
+
+	"github.com/timpalpant/go-cfr/internal/f32"
+	"github.com/timpalpant/go-cfr/internal/policy"
 )
 
 type ASSamplingParams struct {
@@ -13,11 +15,11 @@ type ASSamplingParams struct {
 
 type AverageStrategySamplingCFR struct {
 	params          ASSamplingParams
-	strategyProfile *StrategyTable
+	strategyProfile *PolicyTable
 	slicePool       *threadSafeFloatSlicePool
 }
 
-func NewAverageStrategySampling(strategyProfile *StrategyTable, params ASSamplingParams) *AverageStrategySamplingCFR {
+func NewAverageStrategySampling(strategyProfile *PolicyTable, params ASSamplingParams) *AverageStrategySamplingCFR {
 	return &AverageStrategySamplingCFR{
 		params:          params,
 		strategyProfile: strategyProfile,
@@ -71,16 +73,17 @@ func (c *AverageStrategySamplingCFR) handlePlayerNode(node GameTreeNode, sampleP
 func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
-	policy := c.strategyProfile.GetPolicy(node)
 	regrets := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(regrets)
 	x := rand.Float32()
-	s := c.strategyProfile.GetStrategySum(node)
+	policy := c.strategyProfile.GetPolicy(node).(*policy.Policy)
+	strategy := policy.GetStrategy()
+	s := policy.GetStrategySum()
 	sSum := f32.Sum(s)
 	var cfValue float32
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
-		p := policy[i]
+		p := strategy[i]
 		rho := computeRho(s[i], sSum, c.params)
 		if x < rho {
 			util := c.runHelper(child, player, minF32(rho, 1.0)*sampleProb, traversingPlayer, sampledActions)
@@ -90,7 +93,7 @@ func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNod
 	}
 
 	f32.AddConst(-cfValue, regrets)
-	c.strategyProfile.AddRegret(node, regrets)
+	policy.AddRegret(regrets)
 	return cfValue
 }
 
@@ -107,7 +110,8 @@ func minF32(x, y float32) float32 {
 func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
-	c.strategyProfile.AddStrategyWeight(node, 1.0/sampleProb)
+	policy := c.strategyProfile.GetPolicy(node)
+	policy.AddStrategyWeight(1.0 / sampleProb)
 
 	player := node.Player()
 	key := node.InfoSet(player).Key()
@@ -115,8 +119,8 @@ func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, 
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
-		policy := c.strategyProfile.GetPolicy(node)
-		i = sampleOne(policy)
+		strategy := c.strategyProfile.GetPolicy(node).GetStrategy()
+		i = sampleOne(strategy)
 		sampledActions[key] = i
 	}
 
