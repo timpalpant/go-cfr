@@ -141,7 +141,7 @@ type dcfrPolicy struct {
 	iter            int
 }
 
-func (d dcfrPolicy) AddRegret(instantaneousRegrets []float32) {
+func (d dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
 	advantages := make([]float32, len(instantaneousRegrets))
 	copy(advantages, instantaneousRegrets)
 	d.buf.AddSample(Sample{

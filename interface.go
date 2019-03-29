@@ -68,8 +68,8 @@ type StrategyProfile interface {
 // NodePolicy maintains the action policy for a single Player node.
 type NodePolicy interface {
 	// AddRegret provides new observed instantaneous regrets
-	// to add to the total accumulated regret.
-	AddRegret(instantaneousRegrets []float32)
+	// to add to the total accumulated regret with the given weight.
+	AddRegret(w float32, instantaneousRegrets []float32)
 	// GetStrategy gets the current vector of probabilities with which the ith
 	// available action should be played.
 	GetStrategy() []float32

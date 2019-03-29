@@ -93,7 +93,7 @@ func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNod
 	}
 
 	f32.AddConst(-cfValue, regrets)
-	policy.AddRegret(regrets)
+	policy.AddRegret(1.0, regrets)
 	return cfValue
 }
 

@@ -97,7 +97,7 @@ func (c *OutcomeSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampl
 	cfValue := c.runHelper(child, player, sp*sampleProb, traversingPlayer)
 	regrets[selected] = cfValue
 	f32.AddConst(-p*cfValue, regrets)
-	policy.AddRegret(regrets)
+	policy.AddRegret(1.0, regrets)
 	return p * cfValue
 }
 

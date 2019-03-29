@@ -76,8 +76,7 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, samp
 
 	if sampleProb > 0 {
 		f32.AddConst(-cfValue, regrets)
-		f32.ScalUnitary(1.0/sampleProb, regrets)
-		policy.AddRegret(regrets)
+		policy.AddRegret(1.0/sampleProb, regrets)
 	}
 
 	return cfValue

@@ -73,8 +73,7 @@ func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance 
 	// subtracting out the expected utility over all possible actions.
 	f32.AddConst(-cfValue, regrets)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, reachChance)
-	f32.ScalUnitary(counterFactualP, regrets)
-	policy.AddRegret(regrets)
+	policy.AddRegret(counterFactualP, regrets)
 	reachP := reachProb(player, reachP0, reachP1, reachChance)
 	policy.AddStrategyWeight(reachP)
 	return cfValue

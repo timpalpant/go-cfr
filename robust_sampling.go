@@ -94,8 +94,7 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	// Transform action utilities into instantaneous regrets by
 	// subtracting out the expected utility over all possible actions.
 	f32.AddConst(-cfValue, regrets)
-	f32.ScalUnitary(1.0/q, regrets)
-	policy.AddRegret(regrets)
+	policy.AddRegret(1.0/q, regrets)
 	return cfValue
 }
 
