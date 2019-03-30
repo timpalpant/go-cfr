@@ -1,11 +1,10 @@
-package ldbpolicy
+package ldbstore
 
 import (
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	"github.com/timpalpant/go-cfr"
@@ -15,30 +14,30 @@ import (
 
 func TestVanilla(t *testing.T) {
 	tmpDir, err := ioutil.TempDir("", "cfr-test-")
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer os.RemoveAll(tmpDir)
 
 	opts := &opt.Options{}
-	db, err := leveldb.OpenFile(tmpDir, opts)
+	policy, err := New(tmpDir, opts, cfr.DiscountParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	policy := New(db, cfr.DiscountParams{})
 	opt := cfr.New(policy)
 	testCFR(t, opt, policy, 1000)
 }
 
 func BenchmarkVanilla(b *testing.B) {
 	tmpDir, err := ioutil.TempDir("", "cfr-test-")
-	defer os.RemoveAll(tmpDir)
-
-	opts := &opt.Options{}
-	db, err := leveldb.OpenFile(tmpDir, opts)
 	if err != nil {
 		b.Fatal(err)
 	}
+	defer os.RemoveAll(tmpDir)
 
-	policy := New(db, cfr.DiscountParams{})
+	opts := &opt.Options{}
+	policy, err := New(tmpDir, opts, cfr.DiscountParams{})
 	opt := cfr.New(policy)
 
 	b.ResetTimer()

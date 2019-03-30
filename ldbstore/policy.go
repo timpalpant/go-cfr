@@ -1,9 +1,4 @@
-// Package ldbpolicy implements a tabular CFR policy table that keeps data
-// on disk in a LevelDB database, rather than in memory.
-//
-// It is substantially slower than an in-memory PolicyTable but can scale
-// to games that do not fit in memory.
-package ldbpolicy
+package ldbstore
 
 import (
 	"bytes"
@@ -21,6 +16,11 @@ func init() {
 	gob.Register(&PolicyTable{})
 }
 
+// PolicyTable is a tabular CFR policy table that keeps all node policies
+// on disk in a LevelDB database. PolicyTable implements cfr.StrategyProfile.
+//
+// It is functionally equivalent to a cfr.PolicyTable. In practice, it is significantly
+// slower but will use constant amount of memory since all policies are kept on disk.
 type PolicyTable struct {
 	path   string
 	opts   *opt.Options
@@ -32,6 +32,7 @@ type PolicyTable struct {
 	wOpts *opt.WriteOptions
 }
 
+// New creates a new PolicyTable backed by a LevelDB database at the given path.
 func New(path string, opts *opt.Options, params cfr.DiscountParams) (*PolicyTable, error) {
 	db, err := leveldb.OpenFile(path, opts)
 	if err != nil {
@@ -47,6 +48,7 @@ func New(path string, opts *opt.Options, params cfr.DiscountParams) (*PolicyTabl
 	}, nil
 }
 
+// GobEncode implements gob.GobEncoder.
 func (pt *PolicyTable) GobEncode() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -70,6 +72,7 @@ func (pt *PolicyTable) GobEncode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// GobEncode implements gob.GobDecoder.
 func (pt *PolicyTable) GobDecode(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
@@ -100,14 +103,17 @@ func (pt *PolicyTable) GobDecode(buf []byte) error {
 	return nil
 }
 
+// Close implements io.Closer.
 func (pt *PolicyTable) Close() error {
 	return pt.db.Close()
 }
 
+// Iter implements cfr.StrategyProfile.
 func (pt *PolicyTable) Iter() int {
 	return pt.iter
 }
 
+// Update implements cfr.StrategyProfile.
 func (pt *PolicyTable) Update() {
 	discountPos, discountNeg, discountSum := pt.params.GetDiscountFactors(pt.iter)
 	iter := pt.db.NewIterator(nil, pt.rOpts)
@@ -139,6 +145,7 @@ func (pt *PolicyTable) Update() {
 	pt.iter++
 }
 
+// GetPolicy implements cfr.StrategyProfile.
 func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	key := []byte(node.InfoSet(node.Player()).Key())
 	buf, err := pt.db.Get(key, pt.rOpts)
@@ -151,8 +158,6 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 		if err := policy.GobDecode(buf); err != nil {
 			panic(err)
 		}
-
-		glog.Infof("Loaded policy: %v", policy)
 	}
 
 	return &ldbPolicy{
@@ -163,6 +168,8 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	}
 }
 
+// ldbPolicy implements cfr.NodePolicy, with all updates immediately persisted
+// to the underlying LevelDB database.
 type ldbPolicy struct {
 	*policy.Policy
 	db    *leveldb.DB
@@ -170,19 +177,19 @@ type ldbPolicy struct {
 	wOpts *opt.WriteOptions
 }
 
+// AddRegret implements cfr.NodePolicy.
 func (l *ldbPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	glog.Infof("Adding regret %v with weight %v", instantaneousRegrets, w)
 	l.Policy.AddRegret(w, instantaneousRegrets)
 	l.save()
 }
 
+// AddStrategyWeight implements cfr.NodePolicy.
 func (l *ldbPolicy) AddStrategyWeight(w float32) {
 	l.Policy.AddStrategyWeight(w)
 	l.save()
 }
 
 func (l *ldbPolicy) save() {
-	glog.Infof("Saving policy: %v", l.Policy)
 	buf, err := l.Policy.GobEncode()
 	if err != nil {
 		panic(err)

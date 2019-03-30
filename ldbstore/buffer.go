@@ -1,4 +1,4 @@
-package ldbpolicy
+package ldbstore
 
 import (
 	"bytes"
@@ -12,6 +12,11 @@ import (
 	"github.com/timpalpant/go-cfr/deepcfr"
 )
 
+// ReservoirBuffer implements a reservoir sampling buffer in which samples are
+// stored in a LevelDB database.
+//
+// It is functionally equivalent to deepcfr.ReservoirBuffer. In practice, it will
+// be somewhat slower but use less memory since all samples are kept on disk.
 type ReservoirBuffer struct {
 	path    string
 	opts    *opt.Options
@@ -23,6 +28,8 @@ type ReservoirBuffer struct {
 	wOpts *opt.WriteOptions
 }
 
+// NewReservoirBuffer returns a new ReservoirBuffer with the given max number of samples,
+// backed by a LevelDB database at the given directory path.
 func NewReservoirBuffer(path string, opts *opt.Options, maxSize int) (*ReservoirBuffer, error) {
 	db, err := leveldb.OpenFile(path, opts)
 	if err != nil {
@@ -37,10 +44,12 @@ func NewReservoirBuffer(path string, opts *opt.Options, maxSize int) (*Reservoir
 	}, nil
 }
 
+// Close implements io.Closer.
 func (b *ReservoirBuffer) Close() error {
 	return b.db.Close()
 }
 
+// AddSample implements deepcfr.Buffer.
 func (b *ReservoirBuffer) AddSample(s deepcfr.Sample) {
 	b.n++
 
@@ -70,6 +79,7 @@ func (b *ReservoirBuffer) putSample(idx int, s deepcfr.Sample) {
 	}
 }
 
+// GetSamples implements deepcfr.Buffer.
 func (b *ReservoirBuffer) GetSamples() []deepcfr.Sample {
 	iter := b.db.NewIterator(nil, b.rOpts)
 	var samples []deepcfr.Sample
@@ -92,6 +102,7 @@ func (b *ReservoirBuffer) GetSamples() []deepcfr.Sample {
 	return samples
 }
 
+// GobEncode implements gob.GobEncoder.
 func (b *ReservoirBuffer) GobEncode() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
@@ -115,6 +126,7 @@ func (b *ReservoirBuffer) GobEncode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// GobDecode implements gob.GobDecoder.
 func (b *ReservoirBuffer) GobDecode(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
