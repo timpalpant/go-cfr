@@ -115,6 +115,10 @@ func (b *ThreadSafeReservoirBuffer) GetSamples() []Sample {
 	return samples
 }
 
+func (b *ThreadSafeReservoirBuffer) Close() error {
+	return nil
+}
+
 // GobEncode implements gob.GobEncoder.
 func (b *ThreadSafeReservoirBuffer) GobEncode() ([]byte, error) {
 	return b.buf.GobEncode()

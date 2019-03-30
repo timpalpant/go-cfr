@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/gob"
 	"math/rand"
+	"sync"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -21,7 +22,9 @@ type ReservoirBuffer struct {
 	path    string
 	opts    *opt.Options
 	maxSize int
-	n       int
+
+	mx sync.Mutex
+	n  int
 
 	db    *leveldb.DB
 	rOpts *opt.ReadOptions
@@ -51,6 +54,8 @@ func (b *ReservoirBuffer) Close() error {
 
 // AddSample implements deepcfr.Buffer.
 func (b *ReservoirBuffer) AddSample(s deepcfr.Sample) {
+	b.mx.Lock()
+	defer b.mx.Unlock()
 	b.n++
 
 	if b.n <= b.maxSize {
