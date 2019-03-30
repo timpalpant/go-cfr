@@ -3,6 +3,8 @@ package deepcfr
 import (
 	"encoding/binary"
 	"math"
+
+	"github.com/timpalpant/go-cfr"
 )
 
 // Sample is a single sample of instantaneous advantages
@@ -11,6 +13,22 @@ type Sample struct {
 	InfoSet    []byte
 	Advantages []float32
 	Weight     float32
+}
+
+func NewSample(infoSet cfr.InfoSet, advantages []float32, weight float32) Sample {
+	isBuf, err := infoSet.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
+	advantagesCopy := make([]float32, len(advantages))
+	copy(advantagesCopy, advantages)
+
+	return Sample{
+		InfoSet:    isBuf,
+		Advantages: advantagesCopy,
+		Weight:     weight,
+	}
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler.

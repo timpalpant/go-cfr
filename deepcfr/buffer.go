@@ -5,6 +5,8 @@ import (
 	"encoding/gob"
 	"math/rand"
 	"sync"
+
+	"github.com/timpalpant/go-cfr"
 )
 
 // ReservoirBuffer is a collection of samples held in memory.
@@ -25,15 +27,16 @@ func NewReservoirBuffer(maxSize int) *ReservoirBuffer {
 }
 
 // AddSample implements Buffer.
-func (b *ReservoirBuffer) AddSample(s Sample) {
+func (b *ReservoirBuffer) AddSample(infoSet cfr.InfoSet, advantages []float32, weight float32) {
 	b.n++
 
 	if len(b.samples) < b.maxSize {
-		b.samples = append(b.samples, s)
+		sample := NewSample(infoSet, advantages, weight)
+		b.samples = append(b.samples, sample)
 	} else {
 		m := rand.Intn(b.n)
 		if m < b.maxSize {
-			b.samples[m] = s
+			b.samples[m] = NewSample(infoSet, advantages, weight)
 		}
 	}
 }
@@ -101,9 +104,9 @@ type ThreadSafeReservoirBuffer struct {
 }
 
 // AddSample implements Buffer.
-func (b *ThreadSafeReservoirBuffer) AddSample(s Sample) {
+func (b *ThreadSafeReservoirBuffer) AddSample(infoSet cfr.InfoSet, advantages []float32, weight float32) {
 	b.mu.Lock()
-	b.buf.AddSample(s)
+	b.buf.AddSample(infoSet, advantages, weight)
 	b.mu.Unlock()
 }
 

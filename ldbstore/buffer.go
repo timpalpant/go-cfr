@@ -10,6 +10,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
+	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/deepcfr"
 )
 
@@ -53,16 +54,18 @@ func (b *ReservoirBuffer) Close() error {
 }
 
 // AddSample implements deepcfr.Buffer.
-func (b *ReservoirBuffer) AddSample(s deepcfr.Sample) {
+func (b *ReservoirBuffer) AddSample(infoSet cfr.InfoSet, advantages []float32, weight float32) {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 	b.n++
 
 	if b.n <= b.maxSize {
+		s := deepcfr.NewSample(infoSet, advantages, weight)
 		b.putSample(b.n-1, s)
 	} else {
 		m := rand.Intn(b.n)
 		if m < b.maxSize {
+			s := deepcfr.NewSample(infoSet, advantages, weight)
 			b.putSample(m, s)
 		}
 	}
