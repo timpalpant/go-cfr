@@ -82,6 +82,16 @@ func (d *DeepCFR) Iter() int {
 	return d.iter
 }
 
+func (d *DeepCFR) Close() error {
+	for _, buf := range d.buffers {
+		if err := buf.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // Note that to be able to use this method, the concrete types
 // implementing Model, TrainedModel, and cfr.InfoSet must be registered
 // with gob.
@@ -167,4 +177,8 @@ func uniformDist(n int) []float32 {
 	p := 1.0 / float32(n)
 	f32.AddConst(p, result)
 	return result
+}
+
+func init() {
+	gob.Register(&DeepCFR{})
 }

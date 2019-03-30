@@ -43,6 +43,10 @@ func (b *ReservoirBuffer) GetSamples() []Sample {
 	return b.samples
 }
 
+func (b *ReservoirBuffer) Close() error {
+	return nil
+}
+
 // Cap returns the max number of samples that will be kept in the buffer.
 func (b *ReservoirBuffer) Cap() int {
 	return b.maxSize

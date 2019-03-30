@@ -1,5 +1,7 @@
 package cfr
 
+import "io"
+
 // NodeType is the type of node in an extensive-form game tree.
 type NodeType int
 
@@ -63,6 +65,8 @@ type StrategyProfile interface {
 	Update()
 	// Get the current iteration (number of times update has been called).
 	Iter() int
+
+	io.Closer
 }
 
 // NodePolicy maintains the action policy for a single Player node.

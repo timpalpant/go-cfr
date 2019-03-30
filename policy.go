@@ -8,6 +8,10 @@ import (
 	"github.com/timpalpant/go-cfr/internal/policy"
 )
 
+func init() {
+	gob.Register(&PolicyTable{})
+}
+
 // PolicyTable implements traditional (tabular) CFR by storing accumulated
 // regrets and strategy sums for each InfoSet, which is looked up by its Key().
 type PolicyTable struct {
@@ -43,6 +47,10 @@ func (pt *PolicyTable) Update() {
 
 func (pt *PolicyTable) Iter() int {
 	return pt.iter
+}
+
+func (pt *PolicyTable) Close() error {
+	return nil
 }
 
 func (pt *PolicyTable) GetPolicy(node GameTreeNode) NodePolicy {

@@ -6,6 +6,9 @@
 package ldbpolicy
 
 import (
+	"bytes"
+	"encoding/gob"
+
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -14,7 +17,13 @@ import (
 	"github.com/timpalpant/go-cfr/internal/policy"
 )
 
+func init() {
+	gob.Register(&PolicyTable{})
+}
+
 type PolicyTable struct {
+	path   string
+	opts   *opt.Options
 	params cfr.DiscountParams
 	iter   int
 
@@ -23,12 +32,72 @@ type PolicyTable struct {
 	wOpts *opt.WriteOptions
 }
 
-func New(db *leveldb.DB, params cfr.DiscountParams) *PolicyTable {
+func New(path string, opts *opt.Options, params cfr.DiscountParams) (*PolicyTable, error) {
+	db, err := leveldb.OpenFile(path, opts)
+	if err != nil {
+		return nil, err
+	}
+
 	return &PolicyTable{
+		path:   path,
+		opts:   opts,
 		params: params,
 		iter:   1,
 		db:     db,
+	}, nil
+}
+
+func (pt *PolicyTable) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+
+	if err := enc.Encode(pt.path); err != nil {
+		return nil, err
 	}
+
+	if err := enc.Encode(pt.opts); err != nil {
+		return nil, err
+	}
+
+	if err := enc.Encode(pt.params); err != nil {
+		return nil, err
+	}
+
+	if err := enc.Encode(pt.iter); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (pt *PolicyTable) GobDecode(buf []byte) error {
+	r := bytes.NewReader(buf)
+	dec := gob.NewDecoder(r)
+
+	if err := dec.Decode(&pt.path); err != nil {
+		return err
+	}
+
+	if err := dec.Decode(&pt.opts); err != nil {
+		return err
+	}
+
+	if err := dec.Decode(&pt.params); err != nil {
+		return err
+	}
+
+	if err := dec.Decode(&pt.iter); err != nil {
+		return err
+	}
+
+	pt.opts.ErrorIfMissing = true
+	db, err := leveldb.OpenFile(pt.path, pt.opts)
+	if err != nil {
+		return err
+	}
+
+	pt.db = db
+	return nil
 }
 
 func (pt *PolicyTable) Close() error {
