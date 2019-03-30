@@ -153,10 +153,15 @@ type dcfrPolicy struct {
 }
 
 func (d dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
+	isBuf, err := d.infoSet.MarshalBinary()
+	if err != nil {
+		panic(err)
+	}
+
 	advantages := make([]float32, len(instantaneousRegrets))
 	copy(advantages, instantaneousRegrets)
 	d.buf.AddSample(Sample{
-		InfoSet:    d.infoSet,
+		InfoSet:    isBuf,
 		Advantages: advantages,
 		Weight:     float32(d.iter),
 	})

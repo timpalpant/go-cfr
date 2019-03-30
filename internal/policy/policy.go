@@ -1,8 +1,10 @@
 package policy
 
 import (
-	"bytes"
-	"encoding/gob"
+	"encoding/binary"
+	"math"
+
+	"github.com/golang/glog"
 
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
@@ -102,52 +104,75 @@ func (p *Policy) regretMatching() {
 	}
 }
 
-// UnarshalBinary implements encoding.BinaryUnmarshaler.
-func (p *Policy) UmarshalBinary(buf []byte) error {
-	r := bytes.NewReader(buf)
-	dec := gob.NewDecoder(r)
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
+func (p *Policy) UnmarshalBinary(buf []byte) error {
+	nFloats := len(buf) / 4
+	nActions := (nFloats - 1) / 3
 
-	if err := dec.Decode(&p.currentStrategyWeight); err != nil {
-		return err
-	}
+	glog.Infof("len=%d, nActions=%d", len(buf), nActions)
+	p.currentStrategyWeight = decodeF32(buf[:4])
+	buf = buf[4:]
 
-	if err := dec.Decode(&p.currentStrategy); err != nil {
-		return err
-	}
+	p.currentStrategy = decodeF32s(buf[:4*nActions])
+	buf = buf[4*nActions:]
 
-	if err := dec.Decode(&p.regretSum); err != nil {
-		return err
-	}
+	p.regretSum = decodeF32s(buf[:4*nActions])
+	buf = buf[4*nActions:]
 
-	if err := dec.Decode(&p.strategySum); err != nil {
-		return err
-	}
+	p.strategySum = decodeF32s(buf[:4*nActions])
 
 	return nil
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler.
 func (p *Policy) MarshalBinary() ([]byte, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
+	nActions := len(p.regretSum)
+	nBytes := 4 * (3*nActions + 1)
+	result := make([]byte, nBytes)
 
-	if err := enc.Encode(p.currentStrategyWeight); err != nil {
-		return nil, err
+	putF32(result, p.currentStrategyWeight)
+	buf := result[4:]
+
+	putF32s(buf, p.currentStrategy)
+	buf = buf[4*nActions:]
+
+	putF32s(buf, p.regretSum)
+	buf = buf[4*nActions:]
+
+	putF32s(buf, p.strategySum)
+	buf = buf[4*nActions:]
+
+	return result, nil
+}
+
+func putF32(buf []byte, x float32) {
+	bits := math.Float32bits(x)
+	binary.LittleEndian.PutUint32(buf, bits)
+}
+
+func decodeF32(buf []byte) float32 {
+	bits := binary.LittleEndian.Uint32(buf[:4])
+	return math.Float32frombits(bits)
+}
+
+func putF32s(buf []byte, v []float32) {
+	for i, x := range v {
+		xBuf := buf[4*i : 4*(i+1)]
+		putF32(xBuf, x)
+	}
+}
+
+func decodeF32s(buf []byte) []float32 {
+	n := len(buf) / 4
+	v := make([]float32, n)
+	for i := range v {
+		bits := binary.LittleEndian.Uint32(buf[:4])
+		x := math.Float32frombits(bits)
+		v[i] = x
+		buf = buf[4:]
 	}
 
-	if err := enc.Encode(p.currentStrategy); err != nil {
-		return nil, err
-	}
-
-	if err := enc.Encode(p.regretSum); err != nil {
-		return nil, err
-	}
-
-	if err := enc.Encode(p.strategySum); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+	return v
 }
 
 func uniformDist(n int) []float32 {
