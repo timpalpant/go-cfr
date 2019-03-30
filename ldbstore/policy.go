@@ -48,8 +48,8 @@ func New(path string, opts *opt.Options, params cfr.DiscountParams) (*PolicyTabl
 	}, nil
 }
 
-// GobEncode implements gob.GobEncoder.
-func (pt *PolicyTable) GobEncode() ([]byte, error) {
+// MarshalBinary implements encoding.BinaryMarshaler.
+func (pt *PolicyTable) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
@@ -72,8 +72,8 @@ func (pt *PolicyTable) GobEncode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// GobEncode implements gob.GobDecoder.
-func (pt *PolicyTable) GobDecode(buf []byte) error {
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
+func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
@@ -118,15 +118,16 @@ func (pt *PolicyTable) Update() {
 	discountPos, discountNeg, discountSum := pt.params.GetDiscountFactors(pt.iter)
 	iter := pt.db.NewIterator(nil, pt.rOpts)
 	n := 0
+	// TODO(palpant): Figure out a way to keep track of which policies need updating.
 	for iter.Next() {
 		n++
 		var policy policy.Policy
-		if err := policy.GobDecode(iter.Value()); err != nil {
+		if err := policy.UnmarshalBinary(iter.Value()); err != nil {
 			panic(err)
 		}
 
 		policy.NextStrategy(discountPos, discountNeg, discountSum)
-		buf, err := policy.GobEncode()
+		buf, err := policy.MarshalBinary()
 		if err != nil {
 			panic(err)
 		}
@@ -155,7 +156,7 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 			panic(err)
 		}
 	} else {
-		if err := policy.GobDecode(buf); err != nil {
+		if err := policy.UnmarshalBinary(buf); err != nil {
 			panic(err)
 		}
 	}
@@ -190,7 +191,7 @@ func (l *ldbPolicy) AddStrategyWeight(w float32) {
 }
 
 func (l *ldbPolicy) save() {
-	buf, err := l.Policy.GobEncode()
+	buf, err := l.Policy.MarshalBinary()
 	if err != nil {
 		panic(err)
 	}

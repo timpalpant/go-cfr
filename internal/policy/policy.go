@@ -102,7 +102,8 @@ func (p *Policy) regretMatching() {
 	}
 }
 
-func (p *Policy) GobDecode(buf []byte) error {
+// UnarshalBinary implements encoding.BinaryUnmarshaler.
+func (p *Policy) UmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
@@ -125,7 +126,8 @@ func (p *Policy) GobDecode(buf []byte) error {
 	return nil
 }
 
-func (p *Policy) GobEncode() ([]byte, error) {
+// MarshalBinary implements encoding.BinaryMarshaler.
+func (p *Policy) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 

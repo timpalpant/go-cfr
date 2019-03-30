@@ -1,6 +1,9 @@
 package cfr
 
-import "io"
+import (
+	"encoding"
+	"io"
+)
 
 // NodeType is the type of node in an extensive-form game tree.
 type NodeType int
@@ -20,6 +23,8 @@ type InfoSet interface {
 	// human-readable. For example, it could be a simplified abstraction
 	// or hash of the full game history.
 	Key() string
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
 }
 
 // GameTreeNode is the interface for a node in an extensive-form game tree.

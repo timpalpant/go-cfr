@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -35,10 +36,16 @@ func NewLDBSampledActionStore(path string, opts *opt.Options) (*LDBSampledAction
 // Close implements io.Closer.
 func (l *LDBSampledActionStore) Close() error {
 	if err := l.db.Close(); err != nil {
+		glog.Errorf("error closing sampled action store: %v", err)
 		return err
 	}
 
-	return os.RemoveAll(l.path)
+	if err := os.RemoveAll(l.path); err != nil {
+		glog.Errorf("error closing sampled action store: %v", err)
+		return err
+	}
+
+	return nil
 }
 
 // Get implements cfr.SampledActionStore.

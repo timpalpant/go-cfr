@@ -73,7 +73,8 @@ func (pt *PolicyTable) GetPolicy(node GameTreeNode) NodePolicy {
 	return np
 }
 
-func (pt *PolicyTable) GobDecode(buf []byte) error {
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
+func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 	if err := dec.Decode(&pt.params); err != nil {
@@ -108,8 +109,8 @@ func (pt *PolicyTable) GobDecode(buf []byte) error {
 	return nil
 }
 
-// MarshalTo implements StrategyProfile.
-func (pt *PolicyTable) GobEncode() ([]byte, error) {
+// MarshalBinary implements encoding.BinaryMarshaler.
+func (pt *PolicyTable) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	if err := enc.Encode(pt.params); err != nil {

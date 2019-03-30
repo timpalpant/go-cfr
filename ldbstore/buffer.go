@@ -73,13 +73,12 @@ func (b *ReservoirBuffer) putSample(idx int, s deepcfr.Sample) {
 	m := binary.PutUvarint(buf[:], uint64(idx))
 	key := buf[:m]
 
-	var value bytes.Buffer
-	enc := gob.NewEncoder(&value)
-	if err := enc.Encode(s); err != nil {
+	value, err := s.MarshalBinary()
+	if err != nil {
 		panic(err)
 	}
 
-	if err := b.db.Put(key, value.Bytes(), b.wOpts); err != nil {
+	if err := b.db.Put(key, value, b.wOpts); err != nil {
 		panic(err)
 	}
 }
@@ -89,10 +88,8 @@ func (b *ReservoirBuffer) GetSamples() []deepcfr.Sample {
 	iter := b.db.NewIterator(nil, b.rOpts)
 	var samples []deepcfr.Sample
 	for iter.Next() {
-		r := bytes.NewReader(iter.Value())
-		dec := gob.NewDecoder(r)
 		var sample deepcfr.Sample
-		if err := dec.Decode(&sample); err != nil {
+		if err := sample.UnmarshalBinary(iter.Value()); err != nil {
 			panic(err)
 		}
 
@@ -107,8 +104,8 @@ func (b *ReservoirBuffer) GetSamples() []deepcfr.Sample {
 	return samples
 }
 
-// GobEncode implements gob.GobEncoder.
-func (b *ReservoirBuffer) GobEncode() ([]byte, error) {
+// MarshalBinary implements encoding.BinaryMarshaler.
+func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
@@ -131,8 +128,8 @@ func (b *ReservoirBuffer) GobEncode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// GobDecode implements gob.GobDecoder.
-func (b *ReservoirBuffer) GobDecode(buf []byte) error {
+// UnmarshalBinary implements encoding.BinaryMarshaler.
+func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 

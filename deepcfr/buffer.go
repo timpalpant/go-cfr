@@ -52,8 +52,8 @@ func (b *ReservoirBuffer) Cap() int {
 	return b.maxSize
 }
 
-// GobEncode implements gob.GobEncoder.
-func (b *ReservoirBuffer) GobEncode() ([]byte, error) {
+// MarshalBinary implements encoding.BinaryMarshaler.
+func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
@@ -72,8 +72,8 @@ func (b *ReservoirBuffer) GobEncode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// GobEncode implements gob.GobDecoder.
-func (b *ReservoirBuffer) GobDecode(buf []byte) error {
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
+func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
@@ -119,16 +119,16 @@ func (b *ThreadSafeReservoirBuffer) Close() error {
 	return nil
 }
 
-// GobEncode implements gob.GobEncoder.
-func (b *ThreadSafeReservoirBuffer) GobEncode() ([]byte, error) {
-	return b.buf.GobEncode()
+// MarshalBinary implements encoding.BinaryMarshaler.
+func (b *ThreadSafeReservoirBuffer) MarshalBinary() ([]byte, error) {
+	return b.buf.MarshalBinary()
 }
 
-// GobEncode implements gob.GobDecoder.
-func (b *ThreadSafeReservoirBuffer) GobDecode(buf []byte) error {
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
+func (b *ThreadSafeReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	// Hack to instantiate empty reservoir buffer to perform decoding.
 	b.buf = NewReservoirBuffer(1)
-	return b.buf.GobDecode(buf)
+	return b.buf.UnmarshalBinary(buf)
 }
 
 // NewThreadSafeReservoirBuffer creates a new reservoir buffer with the

@@ -92,10 +92,11 @@ func (d *DeepCFR) Close() error {
 	return nil
 }
 
+// MarshalBinary implements encoding.BinaryMarshaler.
 // Note that to be able to use this method, the concrete types
-// implementing Model, TrainedModel, and cfr.InfoSet must be registered
+// implementing the Model, TrainedModel, and Buffers must be registered
 // with gob.
-func (d *DeepCFR) GobEncode() ([]byte, error) {
+func (d *DeepCFR) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
@@ -120,8 +121,8 @@ func (d *DeepCFR) GobEncode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Reload the current state from the given io.Reader.
-func (d *DeepCFR) GobDecode(buf []byte) error {
+// UnmarshalBinary implements encoding.BinaryUnmarshaler.
+func (d *DeepCFR) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 

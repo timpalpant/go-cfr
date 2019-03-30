@@ -6,14 +6,6 @@ import (
 	"github.com/timpalpant/go-cfr"
 )
 
-// Sample is a single sample of instantaneous advantages
-// collected for training.
-type Sample struct {
-	InfoSet    cfr.InfoSet
-	Advantages []float32
-	Weight     float32
-}
-
 // Buffer collects samples of infoset action advantages to train a Model.
 type Buffer interface {
 	AddSample(s Sample)

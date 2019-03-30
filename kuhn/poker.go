@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math/rand"
+	"strings"
 
 	"github.com/timpalpant/go-cfr"
 )
@@ -159,15 +160,36 @@ func (k *PokerNode) Utility(player int) float64 {
 	return -2.0
 }
 
-type pokerInfoSet string
+type pokerInfoSet struct {
+	history string
+	card    string
+}
 
 func (p pokerInfoSet) Key() string {
-	return string(p)
+	return p.history + "-" + p.card
+}
+
+func (p pokerInfoSet) MarshalBinary() ([]byte, error) {
+	return []byte(p.Key()), nil
+}
+
+func (p *pokerInfoSet) UnmarshalBinary(buf []byte) error {
+	parts := strings.SplitN(string(buf), "-", 1)
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid binary poker info set: %v", parts)
+	}
+
+	p.history = parts[0]
+	p.card = parts[1]
+	return nil
 }
 
 // InfoSet implements cfr.GameTreeNode.
 func (k *PokerNode) InfoSet(player int) cfr.InfoSet {
-	return pokerInfoSet(k.playerCard(player).String() + "-" + k.history)
+	return &pokerInfoSet{
+		history: k.history,
+		card:    k.playerCard(player).String(),
+	}
 }
 
 func (k *PokerNode) playerCard(player int) Card {
@@ -273,5 +295,5 @@ func buildFinalChildren(parent *PokerNode) []PokerNode {
 }
 
 func init() {
-	gob.Register(pokerInfoSet(""))
+	gob.Register(&pokerInfoSet{})
 }
