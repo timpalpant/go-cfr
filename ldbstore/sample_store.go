@@ -3,6 +3,7 @@ package ldbstore
 import (
 	"encoding/binary"
 	"fmt"
+	"os"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -14,6 +15,7 @@ import (
 // It is functionally equivalent to cfr.SampledActionMap. In practice, it will be
 // much slower but use a constant amount of memory even if the game tree is very large.
 type LDBSampledActionStore struct {
+	path  string
 	db    *leveldb.DB
 	rOpts *opt.ReadOptions
 	wOpts *opt.WriteOptions
@@ -21,13 +23,22 @@ type LDBSampledActionStore struct {
 
 // NewLDBSampledActionStore creates a new LDBSampledActionStore backed by
 // the given LevelDB database.
-func NewLDBSampledActionStore(db *leveldb.DB) *LDBSampledActionStore {
-	return &LDBSampledActionStore{db: db}
+func NewLDBSampledActionStore(path string, opts *opt.Options) (*LDBSampledActionStore, error) {
+	db, err := leveldb.OpenFile(path, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	return &LDBSampledActionStore{path: path, db: db}, nil
 }
 
 // Close implements io.Closer.
 func (l *LDBSampledActionStore) Close() error {
-	return l.db.Close()
+	if err := l.db.Close(); err != nil {
+		return err
+	}
+
+	return os.RemoveAll(l.path)
 }
 
 // Get implements cfr.SampledActionStore.

@@ -47,7 +47,7 @@ func TestPoker_ChanceSamplingCFR(t *testing.T) {
 
 func TestPoker_ExternalSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewExternalSampling(policy)
+	opt := cfr.NewExternalSampling(policy, cfr.NewSampledActionsMap)
 	testCFR(t, opt, policy, 200000)
 }
 
@@ -70,21 +70,21 @@ func TestPoker_AverageStrategySamplingCFR(t *testing.T) {
 
 func TestPoker_RobustSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewRobustSampling(policy, 1)
+	opt := cfr.NewRobustSampling(policy, cfr.NewSampledActionsMap, 1)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_CFRPlus(t *testing.T) {
 	plus := cfr.DiscountParams{UseRegretMatchingPlus: true}
 	policy := cfr.NewPolicyTable(plus)
-	opt := cfr.NewExternalSampling(policy)
+	opt := cfr.NewExternalSampling(policy, cfr.NewSampledActionsMap)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_LinearCFR(t *testing.T) {
 	linear := cfr.DiscountParams{LinearWeighting: true}
 	policy := cfr.NewPolicyTable(linear)
-	opt := cfr.NewExternalSampling(policy)
+	opt := cfr.NewExternalSampling(policy, cfr.NewSampledActionsMap)
 	testCFR(t, opt, policy, 200000)
 }
 
@@ -119,7 +119,7 @@ func BenchmarkPoker_ChanceSamplingCFR(b *testing.B) {
 
 func BenchmarkPoker_ExternalSamplingCFR(b *testing.B) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewExternalSampling(policy)
+	opt := cfr.NewExternalSampling(policy, cfr.NewSampledActionsMap)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
 }
@@ -210,7 +210,7 @@ func TestPoker_DeepCFR(t *testing.T) {
 	buf1 := deepcfr.NewReservoirBuffer(10)
 	deepCFR := deepcfr.New(model, []deepcfr.Buffer{buf0, buf1})
 	root := NewGame()
-	opt := cfr.NewExternalSampling(deepCFR)
+	opt := cfr.NewExternalSampling(deepCFR, cfr.NewSampledActionsMap)
 	for i := 1; i <= 1000; i++ {
 		opt.Run(root)
 	}

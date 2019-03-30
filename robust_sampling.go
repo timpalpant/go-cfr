@@ -7,23 +7,26 @@ import (
 )
 
 type RobustSamplingCFR struct {
-	strategyProfile StrategyProfile
-	k               int
-	slicePool       *threadSafeFloatSlicePool
+	strategyProfile       StrategyProfile
+	sampledActionsFactory SampledActionsFactory
+	k                     int
+	slicePool             *threadSafeFloatSlicePool
 }
 
-func NewRobustSampling(strategyProfile StrategyProfile, k int) *RobustSamplingCFR {
+func NewRobustSampling(strategyProfile StrategyProfile,
+	sampledActionsFactory SampledActionsFactory, k int) *RobustSamplingCFR {
 	return &RobustSamplingCFR{
-		strategyProfile: strategyProfile,
-		k:               k,
-		slicePool:       &threadSafeFloatSlicePool{},
+		strategyProfile:       strategyProfile,
+		sampledActionsFactory: sampledActionsFactory,
+		k:                     k,
+		slicePool:             &threadSafeFloatSlicePool{},
 	}
 }
 
 func (c *RobustSamplingCFR) Run(node GameTreeNode) float32 {
 	iter := c.strategyProfile.Iter()
 	traversingPlayer := int(iter % 2)
-	sampledActions := make(map[string]int)
+	sampledActions := c.sampledActionsFactory()
 	return c.runHelper(node, node.Player(), 1.0, traversingPlayer, sampledActions)
 }
 
@@ -32,7 +35,7 @@ func (c *RobustSamplingCFR) runHelper(
 	lastPlayer int,
 	sampleProb float32,
 	traversingPlayer int,
-	sampledActions map[string]int) float32 {
+	sampledActions SampledActions) float32 {
 
 	var ev float32
 	switch node.Type() {
@@ -49,13 +52,13 @@ func (c *RobustSamplingCFR) runHelper(
 	return ev
 }
 
-func (c *RobustSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *RobustSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	child, _ := node.SampleChild()
 	// Sampling probabilities cancel out in the calculation of counterfactual value.
 	return c.runHelper(child, lastPlayer, sampleProb, traversingPlayer, sampledActions)
 }
 
-func (c *RobustSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *RobustSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	if traversingPlayer == node.Player() {
 		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	} else {
@@ -63,7 +66,7 @@ func (c *RobustSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float
 	}
 }
 
-func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	policy := c.strategyProfile.GetPolicy(node)
@@ -108,17 +111,17 @@ func min(i, j int) int {
 
 // Sample player action according to strategy, do not update policy.
 // Save selected action so that they are reused if this infoset is hit again.
-func (c *RobustSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *RobustSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	player := node.Player()
 	key := node.InfoSet(player).Key()
 	policy := c.strategyProfile.GetPolicy(node)
 
-	i, ok := sampledActions[key]
+	i, ok := sampledActions.Get(key)
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
 		i = sampleOne(policy.GetStrategy())
-		sampledActions[key] = i
+		sampledActions.Put(key, i)
 	}
 
 	// Update average strategy for this node.

@@ -8,9 +8,10 @@ import (
 )
 
 type ASSamplingParams struct {
-	Epsilon float32
-	Tau     float32
-	Beta    float32
+	Epsilon               float32
+	Tau                   float32
+	Beta                  float32
+	SampledActionsFactory SampledActionsFactory
 }
 
 type AverageStrategySamplingCFR struct {
@@ -20,6 +21,13 @@ type AverageStrategySamplingCFR struct {
 }
 
 func NewAverageStrategySampling(strategyProfile *PolicyTable, params ASSamplingParams) *AverageStrategySamplingCFR {
+	// If SampledActionsFactory is not provided, by default use in-memory map.
+	if params.SampledActionsFactory == nil {
+		params.SampledActionsFactory = func() SampledActions {
+			return make(SampledActionsMap)
+		}
+	}
+
 	return &AverageStrategySamplingCFR{
 		params:          params,
 		strategyProfile: strategyProfile,
@@ -30,7 +38,7 @@ func NewAverageStrategySampling(strategyProfile *PolicyTable, params ASSamplingP
 func (c *AverageStrategySamplingCFR) Run(node GameTreeNode) float32 {
 	iter := c.strategyProfile.Iter()
 	traversingPlayer := int(iter % 2)
-	sampledActions := make(map[string]int)
+	sampledActions := c.params.SampledActionsFactory()
 	return c.runHelper(node, node.Player(), 1.0, traversingPlayer, sampledActions)
 }
 
@@ -39,7 +47,7 @@ func (c *AverageStrategySamplingCFR) runHelper(
 	lastPlayer int,
 	sampleProb float32,
 	traversingPlayer int,
-	sampledActions map[string]int) float32 {
+	sampledActions SampledActions) float32 {
 
 	var ev float32
 	switch node.Type() {
@@ -56,13 +64,13 @@ func (c *AverageStrategySamplingCFR) runHelper(
 	return ev
 }
 
-func (c *AverageStrategySamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *AverageStrategySamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	child, _ := node.SampleChild()
 	// Sampling probabilities cancel out in the calculation of counterfactual value.
 	return c.runHelper(child, lastPlayer, sampleProb, traversingPlayer, sampledActions)
 }
 
-func (c *AverageStrategySamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *AverageStrategySamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	if traversingPlayer == node.Player() {
 		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	} else {
@@ -70,7 +78,7 @@ func (c *AverageStrategySamplingCFR) handlePlayerNode(node GameTreeNode, sampleP
 	}
 }
 
-func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	regrets := c.slicePool.alloc(nChildren)
@@ -107,7 +115,7 @@ func minF32(x, y float32) float32 {
 
 // Sample player action according to strategy, do not update policy.
 // Save selected action so that they are reused if this infoset is hit again.
-func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions map[string]int) float32 {
+func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
 	policy := c.strategyProfile.GetPolicy(node)
@@ -115,13 +123,13 @@ func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, 
 
 	player := node.Player()
 	key := node.InfoSet(player).Key()
-	i, ok := sampledActions[key]
+	i, ok := sampledActions.Get(key)
 	if !ok {
 		// First time hitting this infoset during this run.
 		// Sample according to current strategy profile.
 		strategy := c.strategyProfile.GetPolicy(node).GetStrategy()
 		i = sampleOne(strategy)
-		sampledActions[key] = i
+		sampledActions.Put(key, i)
 	}
 
 	child := node.GetChild(i)
