@@ -33,11 +33,22 @@ func NewSample(infoSet cfr.InfoSet, advantages []float32, weight float32) Sample
 
 // MarshalBinary implements encoding.BinaryMarshaler.
 func (s Sample) MarshalBinary() ([]byte, error) {
-	nBytes := len(s.InfoSet) + 4*(len(s.Advantages)+2)
-
+	nInfoSetBytes := len(s.InfoSet) + 4
+	nAdvantagesBytes := 4 * len(s.Advantages)
+	nSampleWeightBytes := 4
+	nBytes := nInfoSetBytes + nAdvantagesBytes + nSampleWeightBytes
 	result := make([]byte, nBytes)
-	binary.LittleEndian.PutUint32(result, uint32(len(s.Advantages)))
+
+	// Copy infoset bytes, prefixed by length.
+	binary.LittleEndian.PutUint32(result, uint32(len(s.InfoSet)))
 	buf := result[4:]
+	copy(buf, s.InfoSet)
+	buf = buf[len(s.InfoSet):]
+
+	// Encode sample Weight.
+	bits := math.Float32bits(s.Weight)
+	binary.LittleEndian.PutUint32(buf, bits)
+	buf = buf[4:]
 
 	// Encode sample advantages.
 	for _, x := range s.Advantages {
@@ -46,40 +57,38 @@ func (s Sample) MarshalBinary() ([]byte, error) {
 		buf = buf[4:]
 	}
 
-	// Encode sample Weight.
-	bits := math.Float32bits(s.Weight)
-	binary.LittleEndian.PutUint32(buf, bits)
-	buf = buf[4:]
-
-	// Copy InfoSet bytes.
-	copy(buf, s.InfoSet)
 	return result, nil
 }
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler.
 func (s *Sample) UnmarshalBinary(buf []byte) error {
-	// Look at last 4 bytes to figure out how many advantages we have.
-	nBuf := buf[:4]
-	nAdvantages := binary.LittleEndian.Uint32(nBuf)
+	nInfoSetBytes := binary.LittleEndian.Uint32(buf)
+	buf = buf[4:]
 
-	// Separate out the last bytes that we need to decode from the InfoSet bytes.
-	nBytes := int(4 * (nAdvantages + 2))
-	s.InfoSet = buf[nBytes:]
-	buf = buf[4:nBytes]
+	// UnmarshalBinary must copy the data it wishes to keep.
+	s.InfoSet = make([]byte, nInfoSetBytes)
+	copy(s.InfoSet, buf)
+	buf = buf[nInfoSetBytes:]
 
 	// Decode the weight.
-	weightBits := binary.LittleEndian.Uint32(buf[:4])
+	weightBits := binary.LittleEndian.Uint32(buf)
 	s.Weight = math.Float32frombits(weightBits)
 	buf = buf[4:]
 
 	// Decode the vector of advantages.
-	s.Advantages = make([]float32, nAdvantages)
-	for i := range s.Advantages {
-		aBuf := buf[4*i : 4*(i+1)]
-		bits := binary.LittleEndian.Uint32(aBuf)
-		x := math.Float32frombits(bits)
-		s.Advantages[i] = x
-	}
+	s.Advantages = decodeF32s(buf)
 
 	return nil
+}
+
+func decodeF32s(buf []byte) []float32 {
+	n := len(buf) / 4
+	result := make([]float32, n)
+	for i := range result {
+		bits := binary.LittleEndian.Uint32(buf)
+		result[i] = math.Float32frombits(bits)
+		buf = buf[4:]
+	}
+
+	return result
 }

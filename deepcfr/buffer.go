@@ -98,9 +98,8 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 // ThreadSafeReservoirBuffer wraps ReservoirBuffer to be safe for use
 // from multiple goroutines.
 type ThreadSafeReservoirBuffer struct {
-	mu sync.Mutex
-	// FIXME: This should not be a pointer.
-	buf *ReservoirBuffer
+	mu  sync.Mutex
+	buf ReservoirBuffer
 }
 
 // AddSample implements Buffer.
@@ -129,15 +128,15 @@ func (b *ThreadSafeReservoirBuffer) MarshalBinary() ([]byte, error) {
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler.
 func (b *ThreadSafeReservoirBuffer) UnmarshalBinary(buf []byte) error {
-	// Hack to instantiate empty reservoir buffer to perform decoding.
-	b.buf = NewReservoirBuffer(1)
 	return b.buf.UnmarshalBinary(buf)
 }
 
 // NewThreadSafeReservoirBuffer creates a new reservoir buffer with the
 // given max capacity that is safe for use from multiple goroutines.
 func NewThreadSafeReservoirBuffer(maxSize int) *ThreadSafeReservoirBuffer {
-	return &ThreadSafeReservoirBuffer{buf: NewReservoirBuffer(maxSize)}
+	return &ThreadSafeReservoirBuffer{
+		buf: ReservoirBuffer{maxSize: maxSize},
+	}
 }
 
 func init() {
