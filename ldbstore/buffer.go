@@ -161,3 +161,7 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	b.db = db
 	return nil
 }
+
+func init() {
+	gob.Register(&ReservoirBuffer{})
+}
