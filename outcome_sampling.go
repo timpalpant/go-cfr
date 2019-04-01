@@ -4,9 +4,8 @@ import (
 	"math/rand"
 
 	"github.com/timpalpant/go-cfr/internal/f32"
+	"github.com/timpalpant/go-cfr/internal/sampling"
 )
-
-const eps = 1e-3
 
 // OutcomeSamplingCFR performs CFR iterations by sampling all player and chance actions
 // such that each run corresponds to a single terminal history through the game tree.
@@ -84,7 +83,7 @@ func (c *OutcomeSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampl
 	if rand.Float32() < c.explorationDelta {
 		selected = rand.Intn(nChildren)
 	} else {
-		selected = sampleOne(strategy)
+		selected = sampling.SampleOne(strategy)
 	}
 
 	child := node.GetChild(selected)
@@ -105,7 +104,7 @@ func (c *OutcomeSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampl
 // Save selected action so that they are reused if this infoset is hit again.
 func (c *OutcomeSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int) float32 {
 	policy := c.strategyProfile.GetPolicy(node)
-	selected := sampleOne(policy.GetStrategy())
+	selected := sampling.SampleOne(policy.GetStrategy())
 
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
@@ -115,21 +114,4 @@ func (c *OutcomeSamplingCFR) handleSampledPlayerNode(node GameTreeNode, samplePr
 	// Sampling probabilities cancel out in the calculation of counterfactual value,
 	// so we don't include them here.
 	return c.runHelper(child, node.Player(), sampleProb, traversingPlayer)
-}
-
-func sampleOne(pv []float32) int {
-	x := rand.Float32()
-	var cumProb float32
-	for i, p := range pv {
-		cumProb += p
-		if cumProb > x {
-			return i
-		}
-	}
-
-	if cumProb < 1.0-eps { // Leave room for floating point error.
-		panic("probability distribution does not sum to 1!")
-	}
-
-	return len(pv) - 1
 }

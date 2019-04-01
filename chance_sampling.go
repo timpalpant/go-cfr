@@ -7,6 +7,8 @@ import (
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
+const eps = 1e-3
+
 type ChanceSamplingCFR struct {
 	strategyProfile StrategyProfile
 	slicePool       *threadSafeFloatSlicePool

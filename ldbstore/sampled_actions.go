@@ -8,6 +8,9 @@ import (
 	"github.com/golang/glog"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+
+	"github.com/timpalpant/go-cfr"
+	"github.com/timpalpant/go-cfr/internal/sampling"
 )
 
 // LDBSampledActions implements cfr.SampledActions by storing
@@ -49,11 +52,14 @@ func (l *LDBSampledActions) Close() error {
 }
 
 // Get implements cfr.SampledActions.
-func (l *LDBSampledActions) Get(key string) (int, bool) {
-	buf, err := l.db.Get([]byte(key), l.rOpts)
+func (l *LDBSampledActions) Get(node cfr.GameTreeNode, policy cfr.NodePolicy) int {
+	key := []byte(node.InfoSet(node.Player()).Key())
+	buf, err := l.db.Get(key, l.rOpts)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return -1, false
+			i := sampling.SampleOne(policy.GetStrategy())
+			l.put(key, i)
+			return i
 		}
 
 		panic(err)
@@ -61,17 +67,16 @@ func (l *LDBSampledActions) Get(key string) (int, bool) {
 
 	i, ok := binary.Uvarint(buf)
 	if ok <= 0 {
-		panic(fmt.Errorf("error decoding buffer: %v", ok))
+		panic(fmt.Errorf("error decoding buffer (%d): %v", ok, buf))
 	}
 
-	return int(i), true
+	return int(i)
 }
 
-// Put implements cfr.SampledActions.
-func (l *LDBSampledActions) Put(key string, selected int) {
+func (l *LDBSampledActions) put(key []byte, selected int) {
 	var buf [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(buf[:], uint64(selected))
-	if err := l.db.Put([]byte(key), buf[:n], l.wOpts); err != nil {
+	if err := l.db.Put(key, buf[:n], l.wOpts); err != nil {
 		panic(err)
 	}
 }

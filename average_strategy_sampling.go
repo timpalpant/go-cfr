@@ -122,17 +122,9 @@ func (c *AverageStrategySamplingCFR) handleSampledPlayerNode(node GameTreeNode, 
 	policy.AddStrategyWeight(1.0 / sampleProb)
 
 	player := node.Player()
-	key := node.InfoSet(player).Key()
-	i, ok := sampledActions.Get(key)
-	if !ok {
-		// First time hitting this infoset during this run.
-		// Sample according to current strategy profile.
-		strategy := c.strategyProfile.GetPolicy(node).GetStrategy()
-		i = sampleOne(strategy)
-		sampledActions.Put(key, i)
-	}
+	selected := sampledActions.Get(node, policy)
 
-	child := node.GetChild(i)
+	child := node.GetChild(selected)
 	// Sampling probabilities cancel out in the calculation of counterfactual value,
 	// so we don't include them here.
 	return c.runHelper(child, player, sampleProb, traversingPlayer, sampledActions)

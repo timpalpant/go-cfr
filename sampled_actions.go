@@ -1,13 +1,16 @@
 package cfr
 
-import "io"
+import (
+	"io"
+
+	"github.com/timpalpant/go-cfr/internal/sampling"
+)
 
 // SampledActions records sampled player actions during a run of External Sampling CFR.
 type SampledActions interface {
 	io.Closer
 
-	Get(key string) (int, bool)
-	Put(key string, sampledAction int)
+	Get(node GameTreeNode, policy NodePolicy) int
 }
 
 type SampledActionsFactory func() SampledActions
@@ -18,13 +21,15 @@ func NewSampledActionsMap() SampledActions {
 	return make(SampledActionsMap)
 }
 
-func (m SampledActionsMap) Get(key string) (int, bool) {
+func (m SampledActionsMap) Get(node GameTreeNode, policy NodePolicy) int {
+	key := node.InfoSet(node.Player()).Key()
 	i, ok := m[key]
-	return i, ok
-}
+	if !ok {
+		i = sampling.SampleOne(policy.GetStrategy())
+		m[key] = i
+	}
 
-func (m SampledActionsMap) Put(key string, i int) {
-	m[key] = i
+	return i
 }
 
 func (m SampledActionsMap) Close() error {

@@ -90,16 +90,8 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, samp
 // Save selected action so that they are reused if this infoset is hit again.
 func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	player := node.Player()
-	key := node.InfoSet(player).Key()
 	policy := c.strategyProfile.GetPolicy(node)
-
-	i, ok := sampledActions.Get(key)
-	if !ok {
-		// First time hitting this infoset during this run.
-		// Sample according to current strategy profile.
-		i = sampleOne(policy.GetStrategy())
-		sampledActions.Put(key, i)
-	}
+	selected := sampledActions.Get(node, policy)
 
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
@@ -107,7 +99,7 @@ func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleP
 		policy.AddStrategyWeight(1.0 / sampleProb)
 	}
 
-	child := node.GetChild(i)
+	child := node.GetChild(selected)
 	// Sampling probabilities cancel out in the calculation of counterfactual value,
 	// so we don't include them here.
 	return c.runHelper(child, player, sampleProb, traversingPlayer, sampledActions)
