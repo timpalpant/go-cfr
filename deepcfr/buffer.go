@@ -27,16 +27,16 @@ func NewReservoirBuffer(maxSize int) *ReservoirBuffer {
 }
 
 // AddSample implements Buffer.
-func (b *ReservoirBuffer) AddSample(infoSet cfr.InfoSet, advantages []float32, weight float32) {
+func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32, weight float32) {
 	b.n++
 
 	if len(b.samples) < b.maxSize {
-		sample := NewSample(infoSet, advantages, weight)
+		sample := NewSample(node, advantages, weight)
 		b.samples = append(b.samples, sample)
 	} else {
 		m := rand.Intn(b.n)
 		if m < b.maxSize {
-			b.samples[m] = NewSample(infoSet, advantages, weight)
+			b.samples[m] = NewSample(node, advantages, weight)
 		}
 	}
 }
@@ -103,9 +103,9 @@ type ThreadSafeReservoirBuffer struct {
 }
 
 // AddSample implements Buffer.
-func (b *ThreadSafeReservoirBuffer) AddSample(infoSet cfr.InfoSet, advantages []float32, weight float32) {
+func (b *ThreadSafeReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32, weight float32) {
 	b.mu.Lock()
-	b.buf.AddSample(infoSet, advantages, weight)
+	b.buf.AddSample(node, advantages, weight)
 	b.mu.Unlock()
 }
 

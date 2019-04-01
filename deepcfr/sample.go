@@ -15,7 +15,8 @@ type Sample struct {
 	Weight     float32
 }
 
-func NewSample(infoSet cfr.InfoSet, advantages []float32, weight float32) Sample {
+func NewSample(node cfr.GameTreeNode, advantages []float32, weight float32) Sample {
+	infoSet := node.InfoSet(node.Player())
 	isBuf, err := infoSet.MarshalBinary()
 	if err != nil {
 		panic(err)

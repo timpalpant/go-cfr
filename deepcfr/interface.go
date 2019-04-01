@@ -8,7 +8,7 @@ import (
 
 // Buffer collects samples of infoset action advantages to train a Model.
 type Buffer interface {
-	AddSample(infoSet cfr.InfoSet, advantages []float32, weight float32)
+	AddSample(node cfr.GameTreeNode, advantages []float32, weight float32)
 	GetSamples() []Sample
 	io.Closer
 }

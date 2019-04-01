@@ -49,21 +49,11 @@ func (d *DeepCFR) currentModel(player int) TrainedModel {
 }
 
 func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
-	infoSet := node.InfoSet(node.Player())
-
-	var strategy []float32
-	currentModel := d.currentModel(node.Player())
-	if currentModel == nil {
-		strategy = uniformDist(node.NumChildren())
-	} else {
-		strategy = currentModel.Predict(infoSet, node.NumChildren())
-	}
-
 	return dcfrPolicy{
-		buf:             d.buffers[node.Player()],
-		infoSet:         infoSet,
-		currentStrategy: strategy,
-		iter:            d.iter,
+		node:         node,
+		buf:          d.buffers[node.Player()],
+		currentModel: d.currentModel(node.Player()),
+		iter:         d.iter,
 	}
 }
 
@@ -146,17 +136,27 @@ func (d *DeepCFR) UnmarshalBinary(buf []byte) error {
 }
 
 type dcfrPolicy struct {
-	infoSet         cfr.InfoSet
+	node            cfr.GameTreeNode
 	buf             Buffer
+	currentModel    TrainedModel
 	currentStrategy []float32
 	iter            int
 }
 
 func (d dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	d.buf.AddSample(d.infoSet, instantaneousRegrets, float32(d.iter))
+	d.buf.AddSample(d.node, instantaneousRegrets, float32(d.iter))
 }
 
 func (d dcfrPolicy) GetStrategy() []float32 {
+	if d.currentStrategy == nil {
+		if d.currentModel == nil {
+			d.currentStrategy = uniformDist(d.node.NumChildren())
+		} else {
+			infoSet := d.node.InfoSet(d.node.Player())
+			d.currentStrategy = d.currentModel.Predict(infoSet, d.node.NumChildren())
+		}
+	}
+
 	return d.currentStrategy
 }
 
