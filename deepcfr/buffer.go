@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"math/rand"
+	"sync"
 	"sync/atomic"
 
 	"github.com/timpalpant/go-cfr"
@@ -18,14 +19,16 @@ import (
 // GetSamples does not copy the underlying slice of samples, and therefore
 // is not safe to call concurrently with AddSample.
 type ReservoirBuffer struct {
-	samples []atomic.Value
+	mx      sync.Mutex
+	maxSize int
+	samples []Sample
 	n       int64
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
 func NewReservoirBuffer(maxSize int) *ReservoirBuffer {
 	return &ReservoirBuffer{
-		samples: make([]atomic.Value, maxSize),
+		maxSize: maxSize,
 	}
 }
 
@@ -37,14 +40,18 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 	// if both are simultaneously assigned to the same random bucket.
 	n := int(atomic.AddInt64(&b.n, 1))
 
-	if n < len(b.samples) {
+	if n < b.maxSize {
 		sample := NewSample(node, advantages, weight)
-		b.samples[n-1].Store(sample)
+		b.mx.Lock()
+		b.samples = append(b.samples, sample)
+		b.mx.Unlock()
 	} else {
 		m := rand.Intn(n)
-		if m < len(b.samples) {
+		if m < b.maxSize {
 			sample := NewSample(node, advantages, weight)
-			b.samples[m].Store(sample)
+			b.mx.Lock()
+			b.samples[m] = sample
+			b.mx.Unlock()
 		}
 	}
 }
@@ -52,11 +59,12 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 // GetSamples implements Buffer.
 func (b *ReservoirBuffer) GetSamples() []Sample {
 	n := int(atomic.LoadInt64(&b.n))
-	nSamples := min(n, len(b.samples))
+	nSamples := min(n, b.maxSize)
 	result := make([]Sample, nSamples)
-	for i := 0; i < nSamples; i++ {
-		result[i] = b.samples[i].Load().(Sample)
-	}
+
+	b.mx.Lock()
+	defer b.mx.Unlock()
+	copy(result, b.samples)
 
 	return result
 }
@@ -77,7 +85,7 @@ func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
-	if err := enc.Encode(len(b.samples)); err != nil {
+	if err := enc.Encode(b.maxSize); err != nil {
 		return nil, err
 	}
 
@@ -85,7 +93,7 @@ func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := enc.Encode(b.GetSamples()); err != nil {
+	if err := enc.Encode(b.samples); err != nil {
 		return nil, err
 	}
 
@@ -97,8 +105,7 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
-	maxSize := len(b.samples)
-	if err := dec.Decode(maxSize); err != nil {
+	if err := dec.Decode(&b.maxSize); err != nil {
 		return err
 	}
 
@@ -106,14 +113,8 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	var samples []Sample
-	if err := dec.Decode(&samples); err != nil {
+	if err := dec.Decode(b.samples); err != nil {
 		return err
-	}
-
-	b.samples = make([]atomic.Value, maxSize)
-	for i, s := range samples {
-		b.samples[i].Store(s)
 	}
 
 	return nil
