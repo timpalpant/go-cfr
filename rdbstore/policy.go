@@ -1,12 +1,11 @@
-package ldbstore
+package rdbstore
 
 import (
 	"bytes"
 	"encoding/gob"
 
 	"github.com/golang/glog"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
+	rocksdb "github.com/tecbot/gorocksdb"
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/internal/policy"
@@ -22,29 +21,25 @@ func init() {
 // It is functionally equivalent to a cfr.PolicyTable. In practice, it is significantly
 // slower but will use constant amount of memory since all policies are kept on disk.
 type PolicyTable struct {
-	path   string
-	opts   *opt.Options
-	params cfr.DiscountParams
-	iter   int
+	params    Params
+	discounts cfr.DiscountParams
 
-	db    *leveldb.DB
-	rOpts *opt.ReadOptions
-	wOpts *opt.WriteOptions
+	db   *rocksdb.DB
+	iter int
 }
 
 // New creates a new PolicyTable backed by a LevelDB database at the given path.
-func New(path string, opts *opt.Options, params cfr.DiscountParams) (*PolicyTable, error) {
-	db, err := leveldb.OpenFile(path, opts)
+func New(params Params, discounts cfr.DiscountParams) (*PolicyTable, error) {
+	db, err := rocksdb.OpenDb(params.Options, params.Path)
 	if err != nil {
 		return nil, err
 	}
 
 	return &PolicyTable{
-		path:   path,
-		opts:   opts,
-		params: params,
-		iter:   1,
-		db:     db,
+		params:    params,
+		discounts: discounts,
+		db:        db,
+		iter:      1,
 	}, nil
 }
 
@@ -53,15 +48,11 @@ func (pt *PolicyTable) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
-	if err := enc.Encode(pt.path); err != nil {
+	if err := enc.Encode(pt.params.Path); err != nil {
 		return nil, err
 	}
 
-	if err := enc.Encode(pt.opts); err != nil {
-		return nil, err
-	}
-
-	if err := enc.Encode(pt.params); err != nil {
+	if err := enc.Encode(pt.discounts); err != nil {
 		return nil, err
 	}
 
@@ -77,15 +68,15 @@ func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
-	if err := dec.Decode(&pt.path); err != nil {
+	var path string
+	if err := dec.Decode(&path); err != nil {
 		return err
 	}
 
-	if err := dec.Decode(&pt.opts); err != nil {
-		return err
-	}
+	// TODO: Serialize and reload RocksDB options.
+	pt.params = DefaultParams(path)
 
-	if err := dec.Decode(&pt.params); err != nil {
+	if err := dec.Decode(&pt.discounts); err != nil {
 		return err
 	}
 
@@ -93,8 +84,8 @@ func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	pt.opts.ErrorIfMissing = true
-	db, err := leveldb.OpenFile(pt.path, pt.opts)
+	pt.params.Options.SetCreateIfMissing(false)
+	db, err := rocksdb.OpenDb(pt.params.Options, pt.params.Path)
 	if err != nil {
 		return err
 	}
@@ -105,7 +96,8 @@ func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 
 // Close implements io.Closer.
 func (pt *PolicyTable) Close() error {
-	return pt.db.Close()
+	pt.db.Close()
+	return nil
 }
 
 // Iter implements cfr.StrategyProfile.
@@ -115,14 +107,19 @@ func (pt *PolicyTable) Iter() int {
 
 // Update implements cfr.StrategyProfile.
 func (pt *PolicyTable) Update() {
-	discountPos, discountNeg, discountSum := pt.params.GetDiscountFactors(pt.iter)
-	iter := pt.db.NewIterator(nil, pt.rOpts)
+	discountPos, discountNeg, discountSum := pt.discounts.GetDiscountFactors(pt.iter)
+	it := pt.db.NewIterator(pt.params.ReadOptions)
+	defer it.Close()
+
 	n := 0
 	// TODO(palpant): Figure out a way to keep track of which policies need updating.
-	for iter.Next() {
+	for it.SeekToFirst(); it.Valid(); it.Next() {
+		key := it.Key()
+		value := it.Value()
 		n++
+
 		var policy policy.Policy
-		if err := policy.UnmarshalBinary(iter.Value()); err != nil {
+		if err := policy.UnmarshalBinary(value.Data()); err != nil {
 			panic(err)
 		}
 
@@ -132,13 +129,15 @@ func (pt *PolicyTable) Update() {
 			panic(err)
 		}
 
-		if err := pt.db.Put(iter.Key(), buf, pt.wOpts); err != nil {
+		if err := pt.db.Put(pt.params.WriteOptions, key.Data(), buf); err != nil {
 			panic(err)
 		}
+
+		key.Free()
+		value.Free()
 	}
 
-	iter.Release()
-	if err := iter.Error(); err != nil {
+	if err := it.Err(); err != nil {
 		panic(err)
 	}
 
@@ -149,14 +148,15 @@ func (pt *PolicyTable) Update() {
 // GetPolicy implements cfr.StrategyProfile.
 func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	key := []byte(node.InfoSet(node.Player()).Key())
-	buf, err := pt.db.Get(key, pt.rOpts)
 	policy := policy.New(node.NumChildren())
+	result, err := pt.db.Get(pt.params.ReadOptions, key)
 	if err != nil {
-		if err != leveldb.ErrNotFound {
-			panic(err)
-		}
-	} else {
-		if err := policy.UnmarshalBinary(buf); err != nil {
+		panic(err)
+	}
+	defer result.Free()
+
+	if len(result.Data()) > 0 {
+		if err := policy.UnmarshalBinary(result.Data()); err != nil {
 			panic(err)
 		}
 	}
@@ -165,7 +165,7 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 		Policy: policy,
 		db:     pt.db,
 		key:    key,
-		wOpts:  pt.wOpts,
+		wOpts:  pt.params.WriteOptions,
 	}
 }
 
@@ -173,9 +173,9 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 // to the underlying LevelDB database.
 type ldbPolicy struct {
 	*policy.Policy
-	db    *leveldb.DB
+	db    *rocksdb.DB
 	key   []byte
-	wOpts *opt.WriteOptions
+	wOpts *rocksdb.WriteOptions
 }
 
 // AddRegret implements cfr.NodePolicy.
@@ -196,7 +196,7 @@ func (l *ldbPolicy) save() {
 		panic(err)
 	}
 
-	if err := l.db.Put(l.key, buf, l.wOpts); err != nil {
+	if err := l.db.Put(l.wOpts, l.key, buf); err != nil {
 		panic(err)
 	}
 }

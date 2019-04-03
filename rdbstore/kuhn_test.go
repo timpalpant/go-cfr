@@ -1,11 +1,9 @@
-package ldbstore
+package rdbstore
 
 import (
 	"io/ioutil"
 	"os"
 	"testing"
-
-	"github.com/syndtr/goleveldb/leveldb/opt"
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/kuhn"
@@ -19,11 +17,13 @@ func TestVanilla(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	opts := &opt.Options{}
-	policy, err := New(tmpDir, opts, cfr.DiscountParams{})
+	params := DefaultParams(tmpDir)
+	defer params.Close()
+	policy, err := New(params, cfr.DiscountParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer policy.Close()
 
 	opt := cfr.New(policy)
 	testCFR(t, opt, policy, 1000)
@@ -36,8 +36,14 @@ func BenchmarkVanilla(b *testing.B) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	opts := &opt.Options{}
-	policy, err := New(tmpDir, opts, cfr.DiscountParams{})
+	params := DefaultParams(tmpDir)
+	defer params.Close()
+	policy, err := New(params, cfr.DiscountParams{})
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer policy.Close()
+
 	opt := cfr.New(policy)
 
 	b.ResetTimer()

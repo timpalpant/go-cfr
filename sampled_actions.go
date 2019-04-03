@@ -10,6 +10,10 @@ import (
 type SampledActions interface {
 	io.Closer
 
+	// Get returns the sampled action for the player at the given node.
+	// If this node has not yet been sampled, then an action is sampled from
+	// the current strategy of the given policy. Future calls to Get with
+	// the same node will return the same sampled action.
 	Get(node GameTreeNode, policy NodePolicy) int
 }
 

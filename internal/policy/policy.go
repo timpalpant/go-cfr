@@ -4,8 +4,6 @@ import (
 	"encoding/binary"
 	"math"
 
-	"github.com/golang/glog"
-
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
@@ -109,7 +107,6 @@ func (p *Policy) UnmarshalBinary(buf []byte) error {
 	nFloats := len(buf) / 4
 	nActions := (nFloats - 1) / 3
 
-	glog.Infof("len=%d, nActions=%d", len(buf), nActions)
 	p.currentStrategyWeight = decodeF32(buf[:4])
 	buf = buf[4:]
 

@@ -1,4 +1,4 @@
-package ldbstore
+package rdbstore
 
 import (
 	"bytes"
@@ -7,8 +7,7 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/opt"
+	rocksdb "github.com/tecbot/gorocksdb"
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/deepcfr"
@@ -20,37 +19,33 @@ import (
 // It is functionally equivalent to deepcfr.ReservoirBuffer. In practice, it will
 // be somewhat slower but use less memory since all samples are kept on disk.
 type ReservoirBuffer struct {
-	path    string
-	opts    *opt.Options
+	params  Params
+	db      *rocksdb.DB
 	maxSize int
 
 	mx sync.Mutex
 	n  int
-
-	db    *leveldb.DB
-	rOpts *opt.ReadOptions
-	wOpts *opt.WriteOptions
 }
 
 // NewReservoirBuffer returns a new ReservoirBuffer with the given max number of samples,
 // backed by a LevelDB database at the given directory path.
-func NewReservoirBuffer(path string, opts *opt.Options, maxSize int) (*ReservoirBuffer, error) {
-	db, err := leveldb.OpenFile(path, opts)
+func NewReservoirBuffer(params Params, maxSize int) (*ReservoirBuffer, error) {
+	db, err := rocksdb.OpenDb(params.Options, params.Path)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ReservoirBuffer{
-		path:    path,
-		opts:    opts,
-		maxSize: maxSize,
+		params:  params,
 		db:      db,
+		maxSize: maxSize,
 	}, nil
 }
 
 // Close implements io.Closer.
 func (b *ReservoirBuffer) Close() error {
-	return b.db.Close()
+	b.db.Close()
+	return nil
 }
 
 // AddSample implements deepcfr.Buffer.
@@ -81,26 +76,29 @@ func (b *ReservoirBuffer) putSample(idx int, s deepcfr.Sample) {
 		panic(err)
 	}
 
-	if err := b.db.Put(key, value, b.wOpts); err != nil {
+	if err := b.db.Put(b.params.WriteOptions, key, value); err != nil {
 		panic(err)
 	}
 }
 
 // GetSamples implements deepcfr.Buffer.
 func (b *ReservoirBuffer) GetSamples() []deepcfr.Sample {
-	iter := b.db.NewIterator(nil, b.rOpts)
+	it := b.db.NewIterator(b.params.ReadOptions)
+	defer it.Close()
+
 	var samples []deepcfr.Sample
-	for iter.Next() {
+	for it.SeekToFirst(); it.Valid(); it.Next() {
 		var sample deepcfr.Sample
-		if err := sample.UnmarshalBinary(iter.Value()); err != nil {
+		if err := sample.UnmarshalBinary(it.Value().Data()); err != nil {
 			panic(err)
 		}
 
 		samples = append(samples, sample)
+		it.Key().Free()
+		it.Value().Free()
 	}
 
-	iter.Release()
-	if err := iter.Error(); err != nil {
+	if err := it.Err(); err != nil {
 		panic(err)
 	}
 
@@ -112,11 +110,7 @@ func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
-	if err := enc.Encode(b.path); err != nil {
-		return nil, err
-	}
-
-	if err := enc.Encode(b.opts); err != nil {
+	if err := enc.Encode(b.params.Path); err != nil {
 		return nil, err
 	}
 
@@ -136,13 +130,12 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
-	if err := dec.Decode(&b.path); err != nil {
+	// TODO: Serialize and reload RocksDB options.
+	var path string
+	if err := dec.Decode(&path); err != nil {
 		return err
 	}
-
-	if err := dec.Decode(&b.opts); err != nil {
-		return err
-	}
+	b.params = DefaultParams(path)
 
 	if err := dec.Decode(&b.maxSize); err != nil {
 		return err
@@ -152,8 +145,8 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	b.opts.ErrorIfMissing = true
-	db, err := leveldb.OpenFile(b.path, b.opts)
+	b.params.Options.SetCreateIfMissing(false)
+	db, err := rocksdb.OpenDb(b.params.Options, b.params.Path)
 	if err != nil {
 		return err
 	}
