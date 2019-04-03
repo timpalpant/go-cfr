@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"math/rand"
-	"sync"
+	"sync/atomic"
 
 	"github.com/timpalpant/go-cfr"
 )
@@ -18,55 +18,58 @@ import (
 // GetSamples does not copy the underlying slice of samples, and therefore
 // is not safe to call concurrently with AddSample.
 type ReservoirBuffer struct {
-	mx      sync.Mutex
-	maxSize int
-	samples []Sample
-	n       int
-	rng     *rand.Rand
+	samples []atomic.Value
+	n       int64
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
-func NewReservoirBuffer(maxSize int, seed int64) *ReservoirBuffer {
+func NewReservoirBuffer(maxSize int) *ReservoirBuffer {
 	return &ReservoirBuffer{
-		maxSize: maxSize,
-		rng:     rand.New(rand.NewSource(seed)),
+		samples: make([]atomic.Value, maxSize),
 	}
 }
 
 // AddSample implements Buffer.
 func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32, weight float32) {
-	// Either: We construct the Sample here (which is slow).
-	// Unfortunately it might not be needed, and we'll do work unnecessarily.
-	// Alternatively, we wait to construct the Sample until we know it's being
-	// kept, however, then we need to do the slow step under the lock.
-	sample := NewSample(node, advantages, weight)
+	// We a are a little bit sloppy here for improved performance:
+	// Because we do not hold a lock for the duration of the call, it is possible
+	// for an earlier call to AddSample to collide and overwrite a later call
+	// if both are simultaneously assigned to the same random bucket.
+	n := int(atomic.AddInt64(&b.n, 1))
 
-	b.mx.Lock()
-	defer b.mx.Unlock()
-	b.n++
-
-	if len(b.samples) < b.maxSize {
-		b.samples = append(b.samples, sample)
+	if n < len(b.samples) {
+		sample := NewSample(node, advantages, weight)
+		b.samples[n-1].Store(sample)
 	} else {
-		m := b.rng.Intn(b.n)
-		if m < b.maxSize {
-			b.samples[m] = sample
+		m := rand.Intn(n)
+		if m < len(b.samples) {
+			sample := NewSample(node, advantages, weight)
+			b.samples[m].Store(sample)
 		}
 	}
 }
 
 // GetSamples implements Buffer.
 func (b *ReservoirBuffer) GetSamples() []Sample {
-	return b.samples
+	n := int(atomic.LoadInt64(&b.n))
+	nSamples := min(n, len(b.samples))
+	result := make([]Sample, nSamples)
+	for i := 0; i < nSamples; i++ {
+		result[i] = b.samples[i].Load().(Sample)
+	}
+
+	return result
+}
+
+func min(i, j int) int {
+	if i < j {
+		return i
+	}
+	return j
 }
 
 func (b *ReservoirBuffer) Close() error {
 	return nil
-}
-
-// Cap returns the max number of samples that will be kept in the buffer.
-func (b *ReservoirBuffer) Cap() int {
-	return b.maxSize
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler.
@@ -74,7 +77,7 @@ func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 
-	if err := enc.Encode(b.maxSize); err != nil {
+	if err := enc.Encode(len(b.samples)); err != nil {
 		return nil, err
 	}
 
@@ -82,7 +85,7 @@ func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := enc.Encode(b.samples); err != nil {
+	if err := enc.Encode(b.GetSamples()); err != nil {
 		return nil, err
 	}
 
@@ -94,7 +97,8 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	r := bytes.NewReader(buf)
 	dec := gob.NewDecoder(r)
 
-	if err := dec.Decode(&b.maxSize); err != nil {
+	maxSize := len(b.samples)
+	if err := dec.Decode(maxSize); err != nil {
 		return err
 	}
 
@@ -102,8 +106,14 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	if err := dec.Decode(&b.samples); err != nil {
+	var samples []Sample
+	if err := dec.Decode(&samples); err != nil {
 		return err
+	}
+
+	b.samples = make([]atomic.Value, maxSize)
+	for i, s := range samples {
+		b.samples[i].Store(s)
 	}
 
 	return nil
