@@ -113,7 +113,7 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	if err := dec.Decode(b.samples); err != nil {
+	if err := dec.Decode(&b.samples); err != nil {
 		return err
 	}
 
