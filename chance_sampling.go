@@ -11,13 +11,13 @@ const eps = 1e-3
 
 type ChanceSamplingCFR struct {
 	strategyProfile StrategyProfile
-	slicePool       *threadSafeFloatSlicePool
+	slicePool       *floatSlicePool
 }
 
 func NewChanceSampling(strategyProfile StrategyProfile) *ChanceSamplingCFR {
 	return &ChanceSamplingCFR{
 		strategyProfile: strategyProfile,
-		slicePool:       &threadSafeFloatSlicePool{},
+		slicePool:       &floatSlicePool{},
 	}
 }
 

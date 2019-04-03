@@ -6,13 +6,13 @@ import (
 
 type CFR struct {
 	strategyProfile StrategyProfile
-	slicePool       *threadSafeFloatSlicePool
+	slicePool       *floatSlicePool
 }
 
 func New(strategyProfile StrategyProfile) *CFR {
 	return &CFR{
 		strategyProfile: strategyProfile,
-		slicePool:       &threadSafeFloatSlicePool{},
+		slicePool:       &floatSlicePool{},
 	}
 }
 

@@ -40,7 +40,7 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 	// if both are simultaneously assigned to the same random bucket.
 	n := int(atomic.AddInt64(&b.n, 1))
 
-	if n < b.maxSize {
+	if n <= b.maxSize {
 		sample := NewSample(node, advantages, weight)
 		b.mx.Lock()
 		b.samples = append(b.samples, sample)

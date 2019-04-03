@@ -12,7 +12,7 @@ import (
 type OutcomeSamplingCFR struct {
 	strategyProfile  StrategyProfile
 	explorationDelta float32
-	slicePool        *threadSafeFloatSlicePool
+	slicePool        *floatSlicePool
 }
 
 // NewOutcomeSampling creates a new OutcomeSamplingCFR with the given strategy profile.
@@ -22,7 +22,7 @@ func NewOutcomeSampling(strategyProfile StrategyProfile, explorationDelta float3
 	return &OutcomeSamplingCFR{
 		strategyProfile:  strategyProfile,
 		explorationDelta: explorationDelta,
-		slicePool:        &threadSafeFloatSlicePool{},
+		slicePool:        &floatSlicePool{},
 	}
 }
 
