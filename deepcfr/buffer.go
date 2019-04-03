@@ -13,30 +13,44 @@ import (
 // One the buffer's max size is reached, additional
 // samples are added via reservoir sampling, maintaining
 // a uniform distribution over all previous values.
+//
+// It is safe to call AddSample concurrently from multiple goroutines.
+// GetSamples does not copy the underlying slice of samples, and therefore
+// is not safe to call concurrently with AddSample.
 type ReservoirBuffer struct {
+	mx      sync.Mutex
 	maxSize int
 	samples []Sample
 	n       int
+	rng     *rand.Rand
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
-func NewReservoirBuffer(maxSize int) *ReservoirBuffer {
+func NewReservoirBuffer(maxSize int, seed int64) *ReservoirBuffer {
 	return &ReservoirBuffer{
 		maxSize: maxSize,
+		rng:     rand.New(rand.NewSource(seed)),
 	}
 }
 
 // AddSample implements Buffer.
 func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32, weight float32) {
+	// Either: We construct the Sample here (which is slow).
+	// Unfortunately it might not be needed, and we'll do work unnecessarily.
+	// Alternatively, we wait to construct the Sample until we know it's being
+	// kept, however, then we need to do the slow step under the lock.
+	sample := NewSample(node, advantages, weight)
+
+	b.mx.Lock()
+	defer b.mx.Unlock()
 	b.n++
 
 	if len(b.samples) < b.maxSize {
-		sample := NewSample(node, advantages, weight)
 		b.samples = append(b.samples, sample)
 	} else {
-		m := rand.Intn(b.n)
+		m := b.rng.Intn(b.n)
 		if m < b.maxSize {
-			b.samples[m] = NewSample(node, advantages, weight)
+			b.samples[m] = sample
 		}
 	}
 }
@@ -95,51 +109,6 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 	return nil
 }
 
-// ThreadSafeReservoirBuffer wraps ReservoirBuffer to be safe for use
-// from multiple goroutines.
-type ThreadSafeReservoirBuffer struct {
-	mu  sync.Mutex
-	buf ReservoirBuffer
-}
-
-// AddSample implements Buffer.
-func (b *ThreadSafeReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32, weight float32) {
-	b.mu.Lock()
-	b.buf.AddSample(node, advantages, weight)
-	b.mu.Unlock()
-}
-
-// GetSamples implements Buffer.
-func (b *ThreadSafeReservoirBuffer) GetSamples() []Sample {
-	b.mu.Lock()
-	samples := b.buf.GetSamples()
-	b.mu.Unlock()
-	return samples
-}
-
-func (b *ThreadSafeReservoirBuffer) Close() error {
-	return nil
-}
-
-// MarshalBinary implements encoding.BinaryMarshaler.
-func (b *ThreadSafeReservoirBuffer) MarshalBinary() ([]byte, error) {
-	return b.buf.MarshalBinary()
-}
-
-// UnmarshalBinary implements encoding.BinaryUnmarshaler.
-func (b *ThreadSafeReservoirBuffer) UnmarshalBinary(buf []byte) error {
-	return b.buf.UnmarshalBinary(buf)
-}
-
-// NewThreadSafeReservoirBuffer creates a new reservoir buffer with the
-// given max capacity that is safe for use from multiple goroutines.
-func NewThreadSafeReservoirBuffer(maxSize int) *ThreadSafeReservoirBuffer {
-	return &ThreadSafeReservoirBuffer{
-		buf: ReservoirBuffer{maxSize: maxSize},
-	}
-}
-
 func init() {
 	gob.Register(&ReservoirBuffer{})
-	gob.Register(&ThreadSafeReservoirBuffer{})
 }
