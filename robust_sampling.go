@@ -60,13 +60,13 @@ func (c *RobustSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, 
 
 func (c *RobustSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	if traversingPlayer == node.Player() {
-		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
+		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer)
 	} else {
 		return c.handleSampledPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	}
 }
 
-func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
+func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	policy := c.strategyProfile.GetPolicy(node)
@@ -85,6 +85,8 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	q := 1.0 / float32(nChildren)
 	regrets := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(regrets)
+	sampledActions := c.sampledActionsFactory()
+	defer sampledActions.Close()
 	var cfValue float32
 	for _, i := range selected {
 		child := node.GetChild(i)

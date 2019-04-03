@@ -72,13 +72,13 @@ func (c *AverageStrategySamplingCFR) handleChanceNode(node GameTreeNode, lastPla
 
 func (c *AverageStrategySamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	if traversingPlayer == node.Player() {
-		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
+		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer)
 	} else {
 		return c.handleSampledPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	}
 }
 
-func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
+func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	regrets := c.slicePool.alloc(nChildren)
@@ -89,6 +89,8 @@ func (c *AverageStrategySamplingCFR) handleTraversingPlayerNode(node GameTreeNod
 	s := policy.GetStrategySum()
 	sSum := f32.Sum(s)
 	var cfValue float32
+	sampledActions := c.params.SampledActionsFactory()
+	defer sampledActions.Close()
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
 		p := strategy[i]

@@ -57,19 +57,21 @@ func (c *ExternalSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int
 
 func (c *ExternalSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
 	if traversingPlayer == node.Player() {
-		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
+		return c.handleTraversingPlayerNode(node, sampleProb, traversingPlayer)
 	} else {
 		return c.handleSampledPlayerNode(node, sampleProb, traversingPlayer, sampledActions)
 	}
 }
 
-func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int, sampledActions SampledActions) float32 {
+func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32, traversingPlayer int) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	policy := c.strategyProfile.GetPolicy(node)
 	strategy := policy.GetStrategy()
 	regrets := c.slicePool.alloc(nChildren)
 	defer c.slicePool.free(regrets)
+	sampledActions := c.sampledActionsFactory()
+	defer sampledActions.Close()
 	var cfValue float32
 	for i := 0; i < nChildren; i++ {
 		child := node.GetChild(i)
