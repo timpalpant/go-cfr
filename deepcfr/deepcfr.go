@@ -16,14 +16,15 @@ import (
 // During CFR iterations, samples are added to the given buffer.
 // When NextIter is called, the model is retrained.
 type DeepCFR struct {
-	model         Model
-	buffers       []Buffer
-	trainedModels [][]TrainedModel
-	iter          int
+	model           Model
+	buffers         []Buffer
+	trainedModels   [][]TrainedModel
+	iter            int
+	useSampleWeight bool
 }
 
 // New returns a new DeepCFR policy with the given model and sample buffer.
-func New(model Model, buffers []Buffer) *DeepCFR {
+func New(model Model, buffers []Buffer, useSampleWeight bool) *DeepCFR {
 	return &DeepCFR{
 		model:   model,
 		buffers: buffers,
@@ -31,7 +32,8 @@ func New(model Model, buffers []Buffer) *DeepCFR {
 			[]TrainedModel{},
 			[]TrainedModel{},
 		},
-		iter: 1,
+		iter:            1,
+		useSampleWeight: useSampleWeight,
 	}
 }
 
@@ -50,10 +52,11 @@ func (d *DeepCFR) currentModel(player int) TrainedModel {
 
 func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	return dcfrPolicy{
-		node:         node,
-		buf:          d.buffers[node.Player()],
-		currentModel: d.currentModel(node.Player()),
-		iter:         d.iter,
+		node:            node,
+		buf:             d.buffers[node.Player()],
+		currentModel:    d.currentModel(node.Player()),
+		iter:            d.iter,
+		useSampleWeight: d.useSampleWeight,
 	}
 }
 
@@ -141,10 +144,17 @@ type dcfrPolicy struct {
 	currentModel    TrainedModel
 	currentStrategy []float32
 	iter            int
+	useSampleWeight bool
 }
 
 func (d dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	d.buf.AddSample(d.node, instantaneousRegrets, float32(d.iter))
+	if d.useSampleWeight {
+		w *= float32(d.iter) // Linear CFR on regrets.
+	} else {
+		w = float32(d.iter) // Linear CFR on advantages.
+	}
+
+	d.buf.AddSample(d.node, instantaneousRegrets, w)
 }
 
 func (d dcfrPolicy) GetStrategy() []float32 {
