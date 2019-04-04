@@ -22,6 +22,9 @@ type ReservoirBuffer struct {
 	mx      sync.Mutex
 	maxSize int
 	rngs    []*rand.Rand
+	// "Better to eat the extra cost of a few bytes per Sample,
+	// than to starve on the GC of a million pointers."
+	//    - Go Proverb
 	samples []Sample
 	n       int64
 }
@@ -36,6 +39,7 @@ func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
 	return &ReservoirBuffer{
 		maxSize: maxSize,
 		rngs:    rngs,
+		samples: make([]Sample, 0, maxSize),
 	}
 }
 
