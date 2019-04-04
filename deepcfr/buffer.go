@@ -21,14 +21,21 @@ import (
 type ReservoirBuffer struct {
 	mx      sync.Mutex
 	maxSize int
+	rngs    []*rand.Rand
 	samples []Sample
 	n       int64
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
-func NewReservoirBuffer(maxSize int) *ReservoirBuffer {
+func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
+	rngs := make([]*rand.Rand, maxParallel)
+	for i := range rngs {
+		rngs[i] = rand.New(rand.NewSource(rand.Int63()))
+	}
+
 	return &ReservoirBuffer{
 		maxSize: maxSize,
+		rngs:    rngs,
 	}
 }
 
@@ -46,7 +53,8 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 		b.samples = append(b.samples, sample)
 		b.mx.Unlock()
 	} else {
-		m := rand.Intn(n)
+		rng := b.rngs[n%len(b.rngs)]
+		m := rng.Intn(n)
 		if m < b.maxSize {
 			sample := NewSample(node, advantages, weight)
 			b.mx.Lock()
