@@ -13,6 +13,7 @@ type RobustSamplingCFR struct {
 	slicePool *floatSlicePool
 	mapPool   *stringIntMapPool
 	rng       *rand.Rand
+	aranges   [][]int
 
 	traversingPlayer int
 	sampledActions   map[string]int
@@ -73,7 +74,7 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	strategy := policy.GetStrategy()
 
 	// Sample min(k, |A|) actions with uniform probability.
-	selected := arange(nChildren)
+	selected := c.arange(nChildren)
 	if c.k < len(selected) {
 		c.rng.Shuffle(len(selected), func(i, j int) {
 			selected[i], selected[j] = selected[j], selected[i]
@@ -82,7 +83,7 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 		selected = selected[:c.k]
 	}
 
-	q := 1.0 / float32(nChildren)
+	q := float32(len(selected)) / float32(nChildren)
 	regrets := c.slicePool.alloc(nChildren)
 	oldSampledActions := c.sampledActions
 	c.sampledActions = c.mapPool.alloc()
@@ -103,6 +104,17 @@ func (c *RobustSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sample
 	c.mapPool.free(c.sampledActions)
 	c.sampledActions = oldSampledActions
 	return cfValue
+}
+
+func (c *RobustSamplingCFR) arange(n int) []int {
+	if n >= len(c.aranges) {
+		for len(c.aranges) <= n {
+			r := arange(len(c.aranges))
+			c.aranges = append(c.aranges, r)
+		}
+	}
+
+	return c.aranges[n]
 }
 
 func min(i, j int) int {
