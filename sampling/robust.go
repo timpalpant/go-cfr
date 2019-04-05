@@ -26,11 +26,11 @@ func (rs *RobustSampler) Sample(node cfr.GameTreeNode, policy cfr.NodePolicy) []
 	rs.p = extend(rs.p, nChildren)
 
 	if nChildren <= rs.k {
-		for i := range rs.p[:rs.k] {
+		for i := range rs.p[:nChildren] {
 			rs.p[i] = 1.0
 		}
 
-		return rs.p[:rs.k]
+		return rs.p[:nChildren]
 	}
 
 	for i := 0; i < rs.k; i++ {
