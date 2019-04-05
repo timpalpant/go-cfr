@@ -60,6 +60,7 @@ func main() {
     - Chance Sampling, External Sampling, Outcome Sampling CFR: http://mlanctot.info/files/papers/nips09mccfr.pdf
     - Average Strategy CFR: https://papers.nips.cc/paper/4569-efficient-monte-carlo-counterfactual-regret-minimization-in-games-with-many-player-actions.pdf
     - Robust Sampling CFR: https://arxiv.org/abs/1901.07621
+    - Generalized Sampling CFR: https://dl.acm.org/citation.cfm?id=2900920
 - Deep CFR: https://arxiv.org/abs/1811.00164
 - Single Deep CFR: https://arxiv.org/abs/1901.07621
 
