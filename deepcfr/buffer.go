@@ -10,29 +10,20 @@ import (
 	"github.com/timpalpant/go-cfr"
 )
 
-type randPool struct {
-	mxs  []sync.Mutex
-	rngs []*rand.Rand
-}
+type randPool []*rand.Rand
 
-func newRandPool(n int) *randPool {
+func newRandPool(n int) randPool {
 	rngs := make([]*rand.Rand, n)
 	for i := range rngs {
 		rngs[i] = rand.New(rand.NewSource(rand.Int63()))
 	}
 
-	return &randPool{
-		mxs:  make([]sync.Mutex, n),
-		rngs: rngs,
-	}
+	return randPool(rngs)
 }
 
-func (r *randPool) Intn(n int) int {
-	j := n % len(r.mxs)
-	r.mxs[j].Lock()
-	result := r.rngs[j].Intn(n)
-	r.mxs[j].Unlock()
-	return result
+func (r randPool) Intn(n int) int {
+	k := n % len(r)
+	return r[k].Intn(n)
 }
 
 // ReservoirBuffer is a collection of samples held in memory.
@@ -51,15 +42,17 @@ type ReservoirBuffer struct {
 	//    - Go Proverb
 	samples []Sample
 	n       int64
-	rngPool *randPool
+	rngPool randPool
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
-func NewReservoirBuffer(maxSize, numRNGs int) *ReservoirBuffer {
+func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
 	return &ReservoirBuffer{
 		maxSize: maxSize,
 		samples: make([]Sample, 0, maxSize),
-		rngPool: newRandPool(numRNGs),
+		// RNG pool needs to be 2x because we otherwise we might collide
+		// as the pool entry wraps around.
+		rngPool: newRandPool(2 * maxParallel),
 	}
 }
 
