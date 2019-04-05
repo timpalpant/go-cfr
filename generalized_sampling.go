@@ -10,26 +10,32 @@ type Sampler interface {
 	Sample(GameTreeNode, NodePolicy) []float32
 }
 
+type SamplingParams struct {
+	Sampler               Sampler
+	ProbeUnsampledActions bool
+}
+
 type GeneralizedSamplingCFR struct {
-	strategyProfile StrategyProfile
-	sampler         Sampler
+	strategyProfile       StrategyProfile
+	sampler               Sampler
+	probeUnsampledActions bool
 
 	slicePool *floatSlicePool
 	mapPool   *stringIntMapPool
 	rng       *rand.Rand
-	aranges   [][]int
 
 	traversingPlayer int
 	sampledActions   map[string]int
 }
 
-func NewGeneralizedSampling(strategyProfile StrategyProfile, sampler Sampler) *GeneralizedSamplingCFR {
+func NewGeneralizedSampling(strategyProfile StrategyProfile, params SamplingParams) *GeneralizedSamplingCFR {
 	return &GeneralizedSamplingCFR{
-		strategyProfile: strategyProfile,
-		sampler:         sampler,
-		slicePool:       &floatSlicePool{},
-		mapPool:         &stringIntMapPool{},
-		rng:             rand.New(rand.NewSource(rand.Int63())),
+		strategyProfile:       strategyProfile,
+		sampler:               params.Sampler,
+		probeUnsampledActions: params.ProbeUnsampledActions,
+		slicePool:             &floatSlicePool{},
+		mapPool:               &stringIntMapPool{},
+		rng:                   rand.New(rand.NewSource(rand.Int63())),
 	}
 }
 
@@ -86,7 +92,7 @@ func (c *GeneralizedSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, s
 		var util float32
 		if q > 0 {
 			util = c.runHelper(child, player, q*sampleProb)
-		} else {
+		} else if c.probeUnsampledActions {
 			util = c.probe(child, player)
 		}
 
