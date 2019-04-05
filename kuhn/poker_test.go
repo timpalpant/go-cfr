@@ -8,6 +8,7 @@ import (
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/deepcfr"
+	"github.com/timpalpant/go-cfr/sampling"
 	"github.com/timpalpant/go-cfr/tree"
 )
 
@@ -47,44 +48,50 @@ func TestPoker_ChanceSamplingCFR(t *testing.T) {
 
 func TestPoker_ExternalSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewExternalSampling(policy)
+	es := sampling.NewExternalSampler()
+	opt := cfr.NewGeneralizedSampling(policy, es)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_OutcomeSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewOutcomeSampling(policy, 0.05)
+	os := sampling.NewOutcomeSampler(0.05)
+	opt := cfr.NewGeneralizedSampling(policy, os)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_AverageStrategySamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	params := cfr.ASSamplingParams{
+	params := sampling.AverageStrategyParams{
 		Epsilon: 0.05,
 		Beta:    1000000,
 		Tau:     1000,
 	}
-	opt := cfr.NewAverageStrategySampling(policy, params)
+	as := sampling.NewAverageStrategySampler(params)
+	opt := cfr.NewGeneralizedSampling(policy, as)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_RobustSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewRobustSampling(policy, 1)
+	rs := sampling.NewRobustSampler(1)
+	opt := cfr.NewGeneralizedSampling(policy, rs)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_CFRPlus(t *testing.T) {
 	plus := cfr.DiscountParams{UseRegretMatchingPlus: true}
 	policy := cfr.NewPolicyTable(plus)
-	opt := cfr.NewExternalSampling(policy)
+	es := sampling.NewExternalSampler()
+	opt := cfr.NewGeneralizedSampling(policy, es)
 	testCFR(t, opt, policy, 200000)
 }
 
 func TestPoker_LinearCFR(t *testing.T) {
 	linear := cfr.DiscountParams{LinearWeighting: true}
 	policy := cfr.NewPolicyTable(linear)
-	opt := cfr.NewExternalSampling(policy)
+	es := sampling.NewExternalSampler()
+	opt := cfr.NewGeneralizedSampling(policy, es)
 	testCFR(t, opt, policy, 200000)
 }
 
@@ -119,26 +126,29 @@ func BenchmarkPoker_ChanceSamplingCFR(b *testing.B) {
 
 func BenchmarkPoker_ExternalSamplingCFR(b *testing.B) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewExternalSampling(policy)
+	es := sampling.NewExternalSampler()
+	opt := cfr.NewGeneralizedSampling(policy, es)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
 }
 
 func BenchmarkPoker_AverageStrategySamplingCFR(b *testing.B) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	params := cfr.ASSamplingParams{
+	params := sampling.AverageStrategyParams{
 		Epsilon: 0.05,
 		Beta:    1000000,
 		Tau:     1000,
 	}
-	opt := cfr.NewAverageStrategySampling(policy, params)
+	as := sampling.NewAverageStrategySampler(params)
+	opt := cfr.NewGeneralizedSampling(policy, as)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
 }
 
 func BenchmarkPoker_OutcomeSamplingCFR(b *testing.B) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	opt := cfr.NewOutcomeSampling(policy, 0.01)
+	os := sampling.NewOutcomeSampler(0.05)
+	opt := cfr.NewGeneralizedSampling(policy, os)
 	b.ResetTimer()
 	runCFR(b, opt, policy, b.N)
 }
@@ -210,7 +220,8 @@ func TestPoker_DeepCFR(t *testing.T) {
 	buf1 := deepcfr.NewReservoirBuffer(10, 1)
 	deepCFR := deepcfr.New(model, []deepcfr.Buffer{buf0, buf1}, true)
 	root := NewGame()
-	opt := cfr.NewExternalSampling(deepCFR)
+	es := sampling.NewExternalSampler()
+	opt := cfr.NewGeneralizedSampling(deepCFR, es)
 	for i := 1; i <= 1000; i++ {
 		opt.Run(root)
 	}

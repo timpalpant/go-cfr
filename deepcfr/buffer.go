@@ -77,7 +77,7 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 		b.samples = append(b.samples, sample)
 		b.mx.Unlock()
 	} else {
-		m := rngPool.Intn(n)
+		m := b.rngPool.Intn(n)
 		if m < b.maxSize {
 			sample := NewSample(node, advantages, weight)
 			b.mx.Lock()

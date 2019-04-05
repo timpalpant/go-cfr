@@ -9,26 +9,37 @@ import (
 // OutcomeSampler implements cfr.Sampler by sampling one player action
 // according to the current strategy.
 type OutcomeSampler struct {
+	eps float32
 	rng *rand.Rand
 	p   []float32
 }
 
-func NewOutcomeSampler() *OutcomeSampler {
+func NewOutcomeSampler(explorationEps float32) *OutcomeSampler {
 	return &OutcomeSampler{
+		eps: explorationEps,
 		rng: rand.New(rand.NewSource(rand.Int63())),
 	}
 }
 
 func (os *OutcomeSampler) Sample(node cfr.GameTreeNode, policy cfr.NodePolicy) []float32 {
-	p := policy.GetStrategy()
-	x := os.rng.Float32()
-	selected := SampleOne(p, x)
+	nChildren := node.NumChildren()
 
-	os.p = extend(os.p, len(p))
+	var selected int
+	p := policy.GetStrategy()
+	if os.rng.Float32() < os.eps {
+		selected = os.rng.Intn(nChildren)
+	} else {
+		selected = SampleOne(p, os.rng.Float32())
+	}
+
+	os.p = extend(os.p, nChildren)
 	for i := range os.p {
 		os.p[i] = 0 // memclr
 	}
 
-	os.p[selected] = p[selected]
+	q := eps * (1.0 / float32(nChildren)) // Sampled due to exploration.
+	q += (1.0 - eps) * p[selected]        // Sampled due to strategy.
+
+	os.p[selected] = q
 	return os.p
 }
