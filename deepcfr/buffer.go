@@ -10,6 +10,31 @@ import (
 	"github.com/timpalpant/go-cfr"
 )
 
+type randPool struct {
+	mxs  []sync.Mutex
+	rngs []*rand.Rand
+}
+
+func newRandPool(n int) *randPool {
+	rngs := make([]*rand.Rand, n)
+	for i := range rngs {
+		rngs[i] = rand.New(rand.NewSource(rand.Int63()))
+	}
+
+	return &randPool{
+		mxs:  make([]sync.Mutex, n),
+		rngs: rngs,
+	}
+}
+
+func (r *randPool) Intn(n int) int {
+	j := n % len(r.mxs)
+	r.mxs[j].Lock()
+	result := r.rngs[j].Intn(n)
+	r.mxs[j].Unlock()
+	return result
+}
+
 // ReservoirBuffer is a collection of samples held in memory.
 // One the buffer's max size is reached, additional
 // samples are added via reservoir sampling, maintaining
@@ -21,25 +46,20 @@ import (
 type ReservoirBuffer struct {
 	mx      sync.Mutex
 	maxSize int
-	rngs    []*rand.Rand
 	// "Better to eat the extra cost of a few bytes per Sample,
 	// than to starve on the GC of a million pointers."
 	//    - Go Proverb
 	samples []Sample
 	n       int64
+	rngPool *randPool
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
-func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
-	rngs := make([]*rand.Rand, maxParallel)
-	for i := range rngs {
-		rngs[i] = rand.New(rand.NewSource(rand.Int63()))
-	}
-
+func NewReservoirBuffer(maxSize, numRNGs int) *ReservoirBuffer {
 	return &ReservoirBuffer{
 		maxSize: maxSize,
-		rngs:    rngs,
 		samples: make([]Sample, 0, maxSize),
+		rngPool: newRandPool(numRNGs),
 	}
 }
 
@@ -57,8 +77,7 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 		b.samples = append(b.samples, sample)
 		b.mx.Unlock()
 	} else {
-		rng := b.rngs[n%len(b.rngs)]
-		m := rng.Intn(n)
+		m := rngPool.Intn(n)
 		if m < b.maxSize {
 			sample := NewSample(node, advantages, weight)
 			b.mx.Lock()

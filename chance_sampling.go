@@ -1,9 +1,6 @@
 package cfr
 
 import (
-	"fmt"
-	"math/rand"
-
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
@@ -78,25 +75,4 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 	reachP := reachProb(player, reachP0, reachP1, 1.0)
 	policy.AddStrategyWeight(reachP)
 	return cfValue
-}
-
-// Sample one child of the given Chance node, according to its probability distribution.
-func SampleChanceNode(node GameTreeNode) (GameTreeNode, float64) {
-	x := rand.Float64()
-	var cumProb float64
-	n := node.NumChildren()
-	for i := 0; i < n; i++ {
-		p := node.GetChildProbability(i)
-		cumProb += p
-		if cumProb > x {
-			return node.GetChild(i), p
-		}
-	}
-
-	if cumProb < 1.0-eps { // Leave room for floating point error.
-		panic(fmt.Errorf("probability distribution sums to %v != 1! node: %v, num children: %v",
-			cumProb, node, n))
-	}
-
-	return node.GetChild(n - 1), node.GetChildProbability(n - 1)
 }

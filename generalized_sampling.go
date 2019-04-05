@@ -6,34 +6,42 @@ import (
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
-type ExternalSamplingCFR struct {
+type Sampler interface {
+	Sample(GameTreeNode, NodePolicy) []float32
+}
+
+type GeneralizedSamplingCFR struct {
 	strategyProfile StrategyProfile
-	slicePool       *floatSlicePool
-	mapPool         *stringIntMapPool
-	rng             *rand.Rand
+	sampler         Sampler
+
+	slicePool *floatSlicePool
+	mapPool   *stringIntMapPool
+	rng       *rand.Rand
+	aranges   [][]int
 
 	traversingPlayer int
 	sampledActions   map[string]int
 }
 
-func NewExternalSampling(strategyProfile StrategyProfile) *ExternalSamplingCFR {
-	return &ExternalSamplingCFR{
+func NewGeneralizedSampling(strategyProfile StrategyProfile, sampler Sampler) *GeneralizedSamplingCFR {
+	return &GeneralizedSamplingCFR{
 		strategyProfile: strategyProfile,
+		sampler:         sampler,
 		slicePool:       &floatSlicePool{},
 		mapPool:         &stringIntMapPool{},
 		rng:             rand.New(rand.NewSource(rand.Int63())),
 	}
 }
 
-func (c *ExternalSamplingCFR) Run(node GameTreeNode) float32 {
+func (c *GeneralizedSamplingCFR) Run(node GameTreeNode) float32 {
 	iter := c.strategyProfile.Iter()
-	c.traversingPlayer = iter % 2
+	c.traversingPlayer = int(iter % 2)
 	c.sampledActions = c.mapPool.alloc()
 	defer c.mapPool.free(c.sampledActions)
 	return c.runHelper(node, node.Player(), 1.0)
 }
 
-func (c *ExternalSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, sampleProb float32) float32 {
+func (c *GeneralizedSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, sampleProb float32) float32 {
 	var ev float32
 	switch node.Type() {
 	case TerminalNode:
@@ -49,13 +57,13 @@ func (c *ExternalSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, sampl
 	return ev
 }
 
-func (c *ExternalSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32) float32 {
+func (c *GeneralizedSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32) float32 {
 	child, _ := node.SampleChild()
 	// Sampling probabilities cancel out in the calculation of counterfactual value.
 	return c.runHelper(child, lastPlayer, sampleProb)
 }
 
-func (c *ExternalSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32) float32 {
+func (c *GeneralizedSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb float32) float32 {
 	if node.Player() == c.traversingPlayer {
 		return c.handleTraversingPlayerNode(node, sampleProb)
 	} else {
@@ -63,27 +71,31 @@ func (c *ExternalSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb flo
 	}
 }
 
-func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32) float32 {
+func (c *GeneralizedSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	policy := c.strategyProfile.GetPolicy(node)
-	strategy := policy.GetStrategy()
+
+	qs := c.sampler.Sample(node, policy)
 	regrets := c.slicePool.alloc(nChildren)
 	oldSampledActions := c.sampledActions
 	c.sampledActions = c.mapPool.alloc()
 
-	var cfValue float32
-	for i := 0; i < nChildren; i++ {
+	for i, q := range qs {
 		child := node.GetChild(i)
-		p := strategy[i]
-		regrets[i] = c.runHelper(child, player, p*sampleProb)
-		cfValue += p * regrets[i]
+		var util float32
+		if q > 0 {
+			util = c.runHelper(child, player, q*sampleProb)
+		} else {
+			util = c.probe(child, player)
+		}
+
+		regrets[i] = util
 	}
 
-	if sampleProb > 0 {
-		f32.AddConst(-cfValue, regrets)
-		policy.AddRegret(1.0/sampleProb, regrets)
-	}
+	cfValue := f32.DotUnitary(policy.GetStrategy(), regrets)
+	f32.AddConst(-cfValue, regrets)
+	policy.AddRegret(1.0/sampleProb, regrets)
 
 	c.slicePool.free(regrets)
 	c.mapPool.free(c.sampledActions)
@@ -93,7 +105,7 @@ func (c *ExternalSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, samp
 
 // Sample player action according to strategy, do not update policy.
 // Save selected action so that they are reused if this infoset is hit again.
-func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32) float32 {
+func (c *GeneralizedSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32) float32 {
 	policy := c.strategyProfile.GetPolicy(node)
 
 	// Update average strategy for this node.
@@ -106,6 +118,27 @@ func (c *ExternalSamplingCFR) handleSampledPlayerNode(node GameTreeNode, sampleP
 	// so we don't include them here.
 	child := getOrSample(c.sampledActions, node, policy, c.rng)
 	return c.runHelper(child, node.Player(), sampleProb)
+}
+
+func (c *GeneralizedSamplingCFR) probe(node GameTreeNode, player int) float32 {
+	var ev float32
+	switch node.Type() {
+	case TerminalNode:
+		ev = float32(node.Utility(player))
+	case ChanceNode:
+		child, _ := node.SampleChild()
+		ev = c.probe(child, player)
+	default:
+		policy := c.strategyProfile.GetPolicy(node)
+		strategy := policy.GetStrategy()
+		x := c.rng.Float32()
+		selected := sampleOne(strategy, x)
+		child := node.GetChild(selected)
+		ev = c.probe(child, player)
+	}
+
+	node.Close()
+	return ev
 }
 
 func getOrSample(sampledActions map[string]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) GameTreeNode {
