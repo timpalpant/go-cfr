@@ -3,28 +3,11 @@ package deepcfr
 import (
 	"bytes"
 	"encoding/gob"
-	"math/rand"
 	"sync"
 	"sync/atomic"
 
 	"github.com/timpalpant/go-cfr"
 )
-
-type randPool []*rand.Rand
-
-func newRandPool(n int) randPool {
-	rngs := make([]*rand.Rand, n)
-	for i := range rngs {
-		rngs[i] = rand.New(rand.NewSource(rand.Int63()))
-	}
-
-	return randPool(rngs)
-}
-
-func (r randPool) Intn(n int) int {
-	k := n % len(r)
-	return r[k].Intn(n)
-}
 
 // ReservoirBuffer is a collection of samples held in memory.
 // One the buffer's max size is reached, additional
@@ -35,8 +18,9 @@ func (r randPool) Intn(n int) int {
 // GetSamples does not copy the underlying slice of samples, and therefore
 // is not safe to call concurrently with AddSample.
 type ReservoirBuffer struct {
-	mx      sync.Mutex
-	maxSize int
+	mx          sync.Mutex
+	maxSize     int
+	maxParallel int
 	// "Better to eat the extra cost of a few bytes per Sample,
 	// than to starve on the GC of a million pointers."
 	//    - Go Proverb
@@ -48,11 +32,10 @@ type ReservoirBuffer struct {
 // NewBuffer returns an empty Buffer with the given max size.
 func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
 	return &ReservoirBuffer{
-		maxSize: maxSize,
-		samples: make([]Sample, 0, maxSize),
-		// RNG pool needs to be 2x because we otherwise we might collide
-		// as the pool entry wraps around.
-		rngPool: newRandPool(2 * maxParallel),
+		maxSize:     maxSize,
+		maxParallel: maxParallel,
+		samples:     make([]Sample, 0, maxSize),
+		rngPool:     newRandPool(2 * maxParallel),
 	}
 }
 
@@ -113,6 +96,10 @@ func (b *ReservoirBuffer) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
+	if err := enc.Encode(b.maxParallel); err != nil {
+		return nil, err
+	}
+
 	if err := enc.Encode(b.n); err != nil {
 		return nil, err
 	}
@@ -133,6 +120,10 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
+	if err := dec.Decode(&b.maxParallel); err != nil {
+		return err
+	}
+
 	if err := dec.Decode(&b.n); err != nil {
 		return err
 	}
@@ -141,6 +132,7 @@ func (b *ReservoirBuffer) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
+	b.rngPool = newRandPool(b.maxParallel)
 	return nil
 }
 
