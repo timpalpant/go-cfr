@@ -16,15 +16,14 @@ import (
 // During CFR iterations, samples are added to the given buffer.
 // When NextIter is called, the model is retrained.
 type DeepCFR struct {
-	model           Model
-	buffers         []Buffer
-	trainedModels   [][]TrainedModel
-	iter            int
-	useSampleWeight bool
+	model         Model
+	buffers       []Buffer
+	trainedModels [][]TrainedModel
+	iter          int
 }
 
 // New returns a new DeepCFR policy with the given model and sample buffer.
-func New(model Model, buffers []Buffer, useSampleWeight bool) *DeepCFR {
+func New(model Model, buffers []Buffer) *DeepCFR {
 	return &DeepCFR{
 		model:   model,
 		buffers: buffers,
@@ -32,8 +31,7 @@ func New(model Model, buffers []Buffer, useSampleWeight bool) *DeepCFR {
 			[]TrainedModel{},
 			[]TrainedModel{},
 		},
-		iter:            1,
-		useSampleWeight: useSampleWeight,
+		iter: 1,
 	}
 }
 
@@ -51,12 +49,11 @@ func (d *DeepCFR) currentModel(player int) TrainedModel {
 }
 
 func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
-	return dcfrPolicy{
-		node:            node,
-		buf:             d.buffers[node.Player()],
-		currentModel:    d.currentModel(node.Player()),
-		iter:            d.iter,
-		useSampleWeight: d.useSampleWeight,
+	return &dcfrPolicy{
+		node:         node,
+		buf:          d.buffers[node.Player()],
+		currentModel: d.currentModel(node.Player()),
+		iter:         d.iter,
 	}
 }
 
@@ -73,6 +70,11 @@ func (d *DeepCFR) Update() {
 // Iter implements cfr.StrategyProfile.
 func (d *DeepCFR) Iter() int {
 	return d.iter
+}
+
+func (d *DeepCFR) SampleModel() TrajectorySampledSDCFR {
+	models := sampleModels(d.trainedModels)
+	return TrajectorySampledSDCFR(models)
 }
 
 func (d *DeepCFR) Close() error {
@@ -144,20 +146,14 @@ type dcfrPolicy struct {
 	currentModel    TrainedModel
 	currentStrategy []float32
 	iter            int
-	useSampleWeight bool
 }
 
-func (d dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	if d.useSampleWeight {
-		w *= float32(d.iter) // Linear CFR on regrets.
-	} else {
-		w = float32(d.iter) // Linear CFR on advantages.
-	}
-
+func (d *dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
+	w *= float32(d.iter) // Linear CFR.
 	d.buf.AddSample(d.node, instantaneousRegrets, w)
 }
 
-func (d dcfrPolicy) GetStrategy() []float32 {
+func (d *dcfrPolicy) GetStrategy() []float32 {
 	if d.currentStrategy == nil {
 		if d.currentModel == nil {
 			d.currentStrategy = uniformDist(d.node.NumChildren())
@@ -170,11 +166,11 @@ func (d dcfrPolicy) GetStrategy() []float32 {
 	return d.currentStrategy
 }
 
-func (d dcfrPolicy) AddStrategyWeight(w float32) {
+func (d *dcfrPolicy) AddStrategyWeight(w float32) {
 }
 
-func (d dcfrPolicy) GetAverageStrategy() []float32 {
-	return nil
+func (d *dcfrPolicy) GetAverageStrategy() []float32 {
+	panic("not implemented: use SampleModel to perform trajectory sampling SD-CFR")
 }
 
 func uniformDist(n int) []float32 {
