@@ -149,7 +149,7 @@ type dcfrPolicy struct {
 }
 
 func (d *dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	w *= float32(d.iter) // Linear CFR.
+	w *= float32((d.iter + 1) / 2) // Linear CFR.
 	d.buf.AddSample(d.node, instantaneousRegrets, w)
 }
 
