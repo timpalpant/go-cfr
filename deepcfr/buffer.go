@@ -34,7 +34,7 @@ func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
 	return &ReservoirBuffer{
 		maxSize:     maxSize,
 		maxParallel: maxParallel,
-		samples:     make([]Sample, 0, maxSize),
+		samples:     make([]Sample, maxSize),
 		rngPool:     newRandPool(2 * maxParallel),
 	}
 }
@@ -50,16 +50,13 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 	if n <= b.maxSize {
 		sample := NewSample(node, advantages, weight)
 		b.mx.Lock()
-		b.samples = append(b.samples, sample)
+		b.samples[n-1] = sample
 		b.mx.Unlock()
-	} else {
-		m := b.rngPool.Intn(n)
-		if m < b.maxSize {
-			sample := NewSample(node, advantages, weight)
-			b.mx.Lock()
-			b.samples[m] = sample
-			b.mx.Unlock()
-		}
+	} else if m := b.rngPool.Intn(n); m < b.maxSize {
+		sample := NewSample(node, advantages, weight)
+		b.mx.Lock()
+		b.samples[m] = sample
+		b.mx.Unlock()
 	}
 }
 
