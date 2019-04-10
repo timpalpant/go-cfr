@@ -48,8 +48,8 @@ func (os *MultiOutcomeSampler) Sample(node cfr.GameTreeNode, policy cfr.NodePoli
 
 	q := os.pool.alloc(nChildren)
 	copy(q, policy.GetStrategy())
-	f32.AddConst(os.eps, q)
-	f32.ScalUnitary(1.0/(1.0+float32(nChildren)*eps), q) // Renormalize.
+	f32.AddConst(os.eps/float32(nChildren), q)
+	f32.ScalUnitary(1.0/f32.Sum(q), q) // Renormalize.
 
 	// Compute probability of choosing i if we draw k times.
 	qEff := os.chooseK(q)

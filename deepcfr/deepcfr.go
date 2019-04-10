@@ -72,6 +72,10 @@ func (d *DeepCFR) Iter() int {
 	return d.iter
 }
 
+func (d *DeepCFR) GetBuffer(player int) Buffer {
+	return d.buffers[player]
+}
+
 func (d *DeepCFR) SampleModel() TrajectorySampledSDCFR {
 	models := sampleModels(d.trainedModels)
 	return TrajectorySampledSDCFR(models)
@@ -154,12 +158,23 @@ func (d *dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
 }
 
 func (d *dcfrPolicy) GetStrategy() []float32 {
+	nChildren := d.node.NumChildren()
+
 	if d.currentStrategy == nil {
 		if d.currentModel == nil {
-			d.currentStrategy = uniformDist(d.node.NumChildren())
+			d.currentStrategy = uniformDist(nChildren)
 		} else {
 			infoSet := d.node.InfoSet(d.node.Player())
-			d.currentStrategy = d.currentModel.Predict(infoSet, d.node.NumChildren())
+			d.currentStrategy = d.currentModel.Predict(infoSet, nChildren)
+			makePositive(d.currentStrategy)
+			if total := f32.Sum(d.currentStrategy); total > 0 {
+				f32.ScalUnitary(1.0/total, d.currentStrategy)
+			} else { // Uniform probability.
+				pUniform := 1.0 / float32(nChildren)
+				for i := range d.currentStrategy {
+					d.currentStrategy[i] = pUniform
+				}
+			}
 		}
 	}
 
@@ -178,6 +193,14 @@ func uniformDist(n int) []float32 {
 	p := 1.0 / float32(n)
 	f32.AddConst(p, result)
 	return result
+}
+
+func makePositive(v []float32) {
+	for i := range v {
+		if v[i] < 0 {
+			v[i] = 0.0
+		}
+	}
 }
 
 func init() {

@@ -47,6 +47,12 @@ func (c *ChanceSamplingCFR) handleChanceNode(node GameTreeNode, lastPlayer int, 
 func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1 float32) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
+	if nChildren == 1 {
+		// Optimization to skip trivial nodes with no real choice.
+		child := node.GetChild(0)
+		return c.runHelper(child, player, reachP0, reachP1)
+	}
+
 	policy := c.strategyProfile.GetPolicy(node)
 	strategy := policy.GetStrategy()
 

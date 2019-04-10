@@ -50,6 +50,12 @@ func (c *CFR) handleChanceNode(node GameTreeNode, lastPlayer int, reachP0, reach
 func (c *CFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1, reachChance float32) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
+	if nChildren == 1 {
+		// Optimization to skip trivial nodes with no real choice.
+		child := node.GetChild(0)
+		return c.runHelper(child, player, reachP0, reachP1, reachChance)
+	}
+
 	policy := c.strategyProfile.GetPolicy(node)
 	strategy := policy.GetStrategy()
 	regrets := c.slicePool.alloc(nChildren)

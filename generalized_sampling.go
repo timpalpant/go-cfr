@@ -80,8 +80,13 @@ func (c *GeneralizedSamplingCFR) handlePlayerNode(node GameTreeNode, sampleProb 
 func (c *GeneralizedSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
-	policy := c.strategyProfile.GetPolicy(node)
+	if nChildren == 1 {
+		// Optimization to skip trivial nodes with no real choice.
+		child := node.GetChild(0)
+		return c.runHelper(child, player, sampleProb)
+	}
 
+	policy := c.strategyProfile.GetPolicy(node)
 	qs := c.sampler.Sample(node, policy)
 	regrets := c.slicePool.alloc(nChildren)
 	oldSampledActions := c.sampledActions
