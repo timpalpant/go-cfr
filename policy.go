@@ -102,7 +102,7 @@ func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 			return err
 		}
 
-		pt.policiesByKey[string(key)] = &s
+		pt.policiesByKey[key] = &s
 	}
 
 	pt.mayNeedUpdate = make(map[*policy.Policy]struct{})

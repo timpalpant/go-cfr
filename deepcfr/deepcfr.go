@@ -165,16 +165,7 @@ func (d *dcfrPolicy) GetStrategy() []float32 {
 			d.currentStrategy = uniformDist(nChildren)
 		} else {
 			infoSet := d.node.InfoSet(d.node.Player())
-			d.currentStrategy = d.currentModel.Predict(infoSet, nChildren)
-			makePositive(d.currentStrategy)
-			if total := f32.Sum(d.currentStrategy); total > 0 {
-				f32.ScalUnitary(1.0/total, d.currentStrategy)
-			} else { // Uniform probability.
-				pUniform := 1.0 / float32(nChildren)
-				for i := range d.currentStrategy {
-					d.currentStrategy[i] = pUniform
-				}
-			}
+			d.currentStrategy = regretMatching(d.currentModel.Predict(infoSet, nChildren))
 		}
 	}
 
@@ -186,6 +177,20 @@ func (d *dcfrPolicy) AddStrategyWeight(w float32) {
 
 func (d *dcfrPolicy) GetAverageStrategy() []float32 {
 	panic("not implemented: use SampleModel to perform trajectory sampling SD-CFR")
+}
+
+func regretMatching(advantages []float32) []float32 {
+	makePositive(advantages)
+	if total := f32.Sum(advantages); total > 0 {
+		f32.ScalUnitary(1.0/total, advantages)
+	} else { // Uniform probability.
+		pUniform := 1.0 / float32(len(advantages))
+		for i := range advantages {
+			advantages[i] = pUniform
+		}
+	}
+
+	return advantages
 }
 
 func uniformDist(n int) []float32 {

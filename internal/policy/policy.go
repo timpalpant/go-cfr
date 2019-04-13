@@ -164,8 +164,7 @@ func decodeF32s(buf []byte) []float32 {
 	v := make([]float32, n)
 	for i := range v {
 		bits := binary.LittleEndian.Uint32(buf[:4])
-		x := math.Float32frombits(bits)
-		v[i] = x
+		v[i] = math.Float32frombits(bits)
 		buf = buf[4:]
 	}
 

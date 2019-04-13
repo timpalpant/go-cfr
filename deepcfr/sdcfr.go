@@ -40,7 +40,7 @@ func (d *sampledDCFRPolicy) AddRegret(w float32, instantaneousRegrets []float32)
 func (d *sampledDCFRPolicy) GetStrategy() []float32 {
 	if d.strategy == nil {
 		infoSet := d.node.InfoSet(d.node.Player())
-		d.strategy = d.model.Predict(infoSet, d.node.NumChildren())
+		d.strategy = regretMatching(d.model.Predict(infoSet, d.node.NumChildren()))
 	}
 
 	return d.strategy
