@@ -6,7 +6,13 @@ import (
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
+// Sampler selects a subset of child nodes to traverse.
 type Sampler interface {
+	// Sample returns a vector of sampling probabilities for a
+	// subset of the N children of this NodePolicy. Children with
+	// p > 0 will be traversed. The returned slice may be reused
+	// between calls to sample; a caller must therefore copy the
+	// values before the next call to Sample.
 	Sample(GameTreeNode, NodePolicy) []float32
 }
 
@@ -87,7 +93,8 @@ func (c *GeneralizedSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, s
 	}
 
 	policy := c.strategyProfile.GetPolicy(node)
-	qs := c.sampler.Sample(node, policy)
+	qs := c.slicePool.alloc(nChildren)
+	copy(qs, c.sampler.Sample(node, policy))
 	regrets := c.slicePool.alloc(nChildren)
 	oldSampledActions := c.sampledActions
 	c.sampledActions = c.mapPool.alloc()
@@ -108,6 +115,7 @@ func (c *GeneralizedSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, s
 	f32.AddConst(-cfValue, regrets)
 	policy.AddRegret(1.0/sampleProb, regrets)
 
+	c.slicePool.free(qs)
 	c.slicePool.free(regrets)
 	c.mapPool.free(c.sampledActions)
 	c.sampledActions = oldSampledActions
