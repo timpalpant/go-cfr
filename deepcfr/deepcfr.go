@@ -39,21 +39,12 @@ func (d *DeepCFR) currentPlayer() int {
 	return d.iter % 2
 }
 
-func (d *DeepCFR) currentModel(player int) TrainedModel {
-	playerModels := d.trainedModels[player]
-	if len(playerModels) == 0 {
-		return nil
-	}
-
-	return playerModels[len(playerModels)-1]
-}
-
 func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	return &dcfrPolicy{
-		node:         node,
-		buf:          d.buffers[node.Player()],
-		currentModel: d.currentModel(node.Player()),
-		iter:         d.iter,
+		node:   node,
+		buf:    d.buffers[node.Player()],
+		models: d.trainedModels[node.Player()],
+		iter:   d.iter,
 	}
 }
 
@@ -147,9 +138,17 @@ func (d *DeepCFR) UnmarshalBinary(buf []byte) error {
 type dcfrPolicy struct {
 	node            cfr.GameTreeNode
 	buf             Buffer
-	currentModel    TrainedModel
+	models          []TrainedModel
 	currentStrategy []float32
 	iter            int
+}
+
+func (d *dcfrPolicy) currentModel() TrainedModel {
+	if len(d.models) == 0 {
+		return nil
+	}
+
+	return d.models[len(d.models)-1]
 }
 
 func (d *dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
@@ -158,14 +157,14 @@ func (d *dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
 }
 
 func (d *dcfrPolicy) GetStrategy() []float32 {
-	nChildren := d.node.NumChildren()
-
 	if d.currentStrategy == nil {
-		if d.currentModel == nil {
+		model := d.currentModel()
+		nChildren := d.node.NumChildren()
+		if model == nil {
 			d.currentStrategy = uniformDist(nChildren)
 		} else {
 			infoSet := d.node.InfoSet(d.node.Player())
-			d.currentStrategy = regretMatching(d.currentModel.Predict(infoSet, nChildren))
+			d.currentStrategy = regretMatching(model.Predict(infoSet, nChildren))
 		}
 	}
 
@@ -176,7 +175,46 @@ func (d *dcfrPolicy) AddStrategyWeight(w float32) {
 }
 
 func (d *dcfrPolicy) GetAverageStrategy() []float32 {
-	panic("not implemented: use SampleModel to perform trajectory sampling SD-CFR")
+	infoSet := d.node.InfoSet(d.node.Player())
+	nChildren := d.node.NumChildren()
+
+	modelPredictions := make([][]float32, len(d.models))
+	for i, model := range d.models {
+		modelPredictions[i] = regretMatching(model.Predict(infoSet, nChildren))
+	}
+
+	modelWeights := make([]float32, len(d.models))
+	for i := range modelWeights {
+		modelWeights[i] = 1.0
+	}
+
+	lastChild := d.node
+	for node := d.node.Parent(); node != nil; node = node.Parent() {
+		// Figure out which child of parent.
+		childIdx := -1
+		for i := 0; i < node.NumChildren(); i++ {
+			if node.GetChild(i) == lastChild {
+				childIdx = i
+				break
+			}
+		}
+
+		if node.Player() == d.node.Player() {
+			for i, model := range d.models {
+				strategy := regretMatching(model.Predict(infoSet, nChildren))
+				modelWeights[i] *= strategy[childIdx]
+			}
+		}
+
+		lastChild = node
+	}
+
+	result := make([]float32, nChildren)
+	for i, w := range modelWeights {
+		f32.AxpyUnitary(w, modelPredictions[i], result)
+	}
+
+	return result
 }
 
 func regretMatching(advantages []float32) []float32 {
