@@ -45,6 +45,7 @@ func (c Card) String() string {
 
 // PokerNode implements cfr.GameTreeNode for Kuhn Poker.
 type PokerNode struct {
+	parent        *PokerNode
 	player        int
 	children      []PokerNode
 	probabilities []float64
@@ -88,6 +89,11 @@ func (k *PokerNode) GetChild(i int) cfr.GameTreeNode {
 	return &k.children[i]
 }
 
+// Parent implements cfr.GameTreeNode.
+func (k *PokerNode) Parent() cfr.GameTreeNode {
+	return k.parent
+}
+
 // GetChildProbability implements cfr.GameTreeNode.
 func (k *PokerNode) GetChildProbability(i int) float64 {
 	if k.children == nil {
@@ -106,12 +112,12 @@ func (k *PokerNode) SampleChild() (cfr.GameTreeNode, float64) {
 // Type implements cfr.GameTreeNode.
 func (k *PokerNode) Type() cfr.NodeType {
 	if k.IsTerminal() {
-		return cfr.TerminalNode
+		return cfr.TerminalNodeType
 	} else if k.player == chance {
-		return cfr.ChanceNode
+		return cfr.ChanceNodeType
 	}
 
-	return cfr.PlayerNode
+	return cfr.PlayerNodeType
 }
 
 func (k *PokerNode) IsTerminal() bool {
@@ -211,7 +217,7 @@ func uniformDist(n int) []float64 {
 func (k *PokerNode) buildChildren() {
 	switch len(k.history) {
 	case 0:
-		k.children = buildP0Deals()
+		k.children = buildP0Deals(k)
 		k.probabilities = uniformDist(len(k.children))
 	case 1:
 		k.children = buildP1Deals(k)
@@ -225,10 +231,11 @@ func (k *PokerNode) buildChildren() {
 	}
 }
 
-func buildP0Deals() []PokerNode {
+func buildP0Deals(parent *PokerNode) []PokerNode {
 	var result []PokerNode
 	for _, card := range []Card{Jack, Queen, King} {
 		child := PokerNode{
+			parent:  parent,
 			player:  chance,
 			history: string(Random),
 			p0Card:  card,
@@ -248,6 +255,7 @@ func buildP1Deals(parent *PokerNode) []PokerNode {
 		}
 
 		child := *parent
+		child.parent = parent
 		child.player = player0
 		child.p1Card = card
 		child.history += string([]byte{Random})
@@ -262,6 +270,7 @@ func buildRound1Children(parent *PokerNode) []PokerNode {
 	var result []PokerNode
 	for _, choice := range []byte{Check, Bet} {
 		child := *parent
+		child.parent = parent
 		child.player = player1
 		child.history += string([]byte{choice})
 		result = append(result, child)
@@ -273,6 +282,7 @@ func buildRound2Children(parent *PokerNode) []PokerNode {
 	var result []PokerNode
 	for _, choice := range []byte{Check, Bet} {
 		child := *parent
+		child.parent = parent
 		child.player = player0
 		child.history += string([]byte{choice})
 		result = append(result, child)
@@ -285,6 +295,7 @@ func buildFinalChildren(parent *PokerNode) []PokerNode {
 	if parent.history[2] == Check && parent.history[3] == Bet {
 		for _, choice := range []byte{Check, Bet} {
 			child := *parent
+			child.parent = parent
 			child.player = player1
 			child.history += string([]byte{choice})
 			result = append(result, child)

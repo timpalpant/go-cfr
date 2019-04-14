@@ -16,15 +16,9 @@ type Sampler interface {
 	Sample(GameTreeNode, NodePolicy) []float32
 }
 
-type SamplingParams struct {
-	Sampler               Sampler
-	ProbeUnsampledActions bool
-}
-
 type GeneralizedSamplingCFR struct {
-	strategyProfile       StrategyProfile
-	sampler               Sampler
-	probeUnsampledActions bool
+	strategyProfile StrategyProfile
+	sampler         Sampler
 
 	slicePool *floatSlicePool
 	mapPool   *stringIntMapPool
@@ -34,14 +28,13 @@ type GeneralizedSamplingCFR struct {
 	sampledActions   map[string]int
 }
 
-func NewGeneralizedSampling(strategyProfile StrategyProfile, params SamplingParams) *GeneralizedSamplingCFR {
+func NewGeneralizedSampling(strategyProfile StrategyProfile, sampler Sampler) *GeneralizedSamplingCFR {
 	return &GeneralizedSamplingCFR{
-		strategyProfile:       strategyProfile,
-		sampler:               params.Sampler,
-		probeUnsampledActions: params.ProbeUnsampledActions,
-		slicePool:             &floatSlicePool{},
-		mapPool:               &stringIntMapPool{},
-		rng:                   rand.New(rand.NewSource(rand.Int63())),
+		strategyProfile: strategyProfile,
+		sampler:         sampler,
+		slicePool:       &floatSlicePool{},
+		mapPool:         &stringIntMapPool{},
+		rng:             rand.New(rand.NewSource(rand.Int63())),
 	}
 }
 
@@ -56,9 +49,9 @@ func (c *GeneralizedSamplingCFR) Run(node GameTreeNode) float32 {
 func (c *GeneralizedSamplingCFR) runHelper(node GameTreeNode, lastPlayer int, sampleProb float32) float32 {
 	var ev float32
 	switch node.Type() {
-	case TerminalNode:
+	case TerminalNodeType:
 		ev = float32(node.Utility(lastPlayer))
-	case ChanceNode:
+	case ChanceNodeType:
 		ev = c.handleChanceNode(node, lastPlayer, sampleProb)
 	default:
 		sgn := getSign(lastPlayer, node.Player())
@@ -104,7 +97,7 @@ func (c *GeneralizedSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, s
 		var util float32
 		if q > 0 {
 			util = c.runHelper(child, player, q*sampleProb)
-		} else if c.probeUnsampledActions {
+		} else {
 			util = c.probe(child, player)
 		}
 
@@ -142,9 +135,9 @@ func (c *GeneralizedSamplingCFR) handleSampledPlayerNode(node GameTreeNode, samp
 func (c *GeneralizedSamplingCFR) probe(node GameTreeNode, player int) float32 {
 	var ev float32
 	switch node.Type() {
-	case TerminalNode:
+	case TerminalNodeType:
 		ev = float32(node.Utility(player))
-	case ChanceNode:
+	case ChanceNodeType:
 		child, _ := node.SampleChild()
 		ev = c.probe(child, player)
 	default:

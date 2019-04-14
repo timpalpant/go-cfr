@@ -55,7 +55,7 @@ func TestPoker_ExternalSamplingCFR(t *testing.T) {
 
 func TestPoker_OutcomeSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	os := sampling.NewOutcomeSampler(0.05)
+	os := sampling.NewOutcomeSampler(0.3)
 	opt := cfr.NewGeneralizedSampling(policy, os)
 	testCFR(t, opt, policy, 200000)
 }
@@ -76,6 +76,13 @@ func TestPoker_RobustSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	rs := sampling.NewRobustSampler(1)
 	opt := cfr.NewGeneralizedSampling(policy, rs)
+	testCFR(t, opt, policy, 200000)
+}
+
+func TestPoker_MultiOutcomeSamplingCFR(t *testing.T) {
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
+	mos := sampling.NewMultiOutcomeSampler(1, 0.1)
+	opt := cfr.NewGeneralizedSampling(policy, mos)
 	testCFR(t, opt, policy, 200000)
 }
 
@@ -161,7 +168,7 @@ func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
 	root := runCFR(t, opt, policy, nIter)
 	seen := make(map[string]struct{})
 	tree.Visit(root, func(node cfr.GameTreeNode) {
-		if node.Type() != cfr.PlayerNode {
+		if node.Type() != cfr.PlayerNodeType {
 			return
 		}
 
@@ -218,7 +225,7 @@ func TestPoker_DeepCFR(t *testing.T) {
 	gob.Register(model)
 	buf0 := deepcfr.NewReservoirBuffer(10, 1)
 	buf1 := deepcfr.NewReservoirBuffer(10, 1)
-	deepCFR := deepcfr.New(model, []deepcfr.Buffer{buf0, buf1}, true)
+	deepCFR := deepcfr.New(model, []deepcfr.Buffer{buf0, buf1})
 	root := NewGame()
 	es := sampling.NewExternalSampler()
 	opt := cfr.NewGeneralizedSampling(deepCFR, es)
@@ -277,7 +284,7 @@ func TestMarshalStrategy(t *testing.T) {
 	// Verify that current strategy and average strategy are unchanged
 	// after marshalling round trip.
 	tree.Visit(root, func(node cfr.GameTreeNode) {
-		if node.Type() != cfr.PlayerNode {
+		if node.Type() != cfr.PlayerNodeType {
 			return
 		}
 

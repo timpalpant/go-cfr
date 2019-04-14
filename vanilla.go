@@ -23,9 +23,9 @@ func (c *CFR) Run(node GameTreeNode) float32 {
 func (c *CFR) runHelper(node GameTreeNode, lastPlayer int, reachP0, reachP1, reachChance float32) float32 {
 	var ev float32
 	switch node.Type() {
-	case TerminalNode:
+	case TerminalNodeType:
 		ev = float32(node.Utility(lastPlayer))
-	case ChanceNode:
+	case ChanceNodeType:
 		ev = c.handleChanceNode(node, lastPlayer, reachP0, reachP1, reachChance)
 	default:
 		sgn := getSign(lastPlayer, node.Player())

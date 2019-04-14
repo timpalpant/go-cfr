@@ -9,9 +9,9 @@ import (
 type NodeType int
 
 const (
-	ChanceNode NodeType = iota
-	TerminalNode
-	PlayerNode
+	ChanceNodeType NodeType = iota
+	TerminalNodeType
+	PlayerNodeType
 )
 
 // InfoSet is the observable game history from the point of view of one player.
@@ -27,27 +27,23 @@ type InfoSet interface {
 	encoding.BinaryUnmarshaler
 }
 
-// GameTreeNode is the interface for a node in an extensive-form game tree.
-type GameTreeNode interface {
-	// NodeType returns the type of game node.
-	Type() NodeType
-
-	// Release resources held by this node (including any children).
-	Close()
-
-	// The number of direct children of this node.
-	NumChildren() int
-	// Get the ith child of this node.
-	GetChild(i int) GameTreeNode
+// ChanceNode is a node that has a pre-defined probability distribution over its children.
+type ChanceNode interface {
 	// Get the probability of the ith child of this node.
 	// May only be called for nodes with Type == Chance.
 	GetChildProbability(i int) float64
+
 	// Sample a single child from this Chance node according to the probability
 	// distribution over children.
-	// Implementations may use SampleChanceNode to sample from the CDF,
-	// or implement their own sampling.
+	//
+	// Implementations may reuse sampling.SampleChanceNode to sample from the CDF,
+	// (by scanning over GetChildProbability) or implement their own more efficient
+	// sampling.
 	SampleChild() (child GameTreeNode, p float64)
+}
 
+// PlayerNode is a node in which one of the player's acts.
+type PlayerNode interface {
 	// Player returns this current node's acting player.
 	// It may only be called for nodes with IsChance() == false.
 	Player() int
@@ -56,6 +52,28 @@ type GameTreeNode interface {
 	// Utility returns this node's utility for the given player.
 	// It must only be called for nodes with type == Terminal.
 	Utility(player int) float64
+}
+
+// Tree node represents a node in a directed rooted tree.
+type TreeNode interface {
+	// The number of direct children of this node.
+	NumChildren() int
+	// Get the ith child of this node.
+	GetChild(i int) GameTreeNode
+	// Get the parent of this node.
+	Parent() GameTreeNode
+}
+
+// GameTreeNode is the interface for a node in an extensive-form game tree.
+type GameTreeNode interface {
+	// NodeType returns the type of game node.
+	Type() NodeType
+	// Release resources held by this node (including any children).
+	Close()
+
+	TreeNode
+	ChanceNode
+	PlayerNode
 }
 
 // StrategyProfile maintains a collection of regret-matching policies for each
