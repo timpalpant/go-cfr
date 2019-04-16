@@ -3,6 +3,8 @@ package deepcfr
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
+	"sync"
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/internal/f32"
@@ -175,14 +177,60 @@ func (d *dcfrPolicy) AddStrategyWeight(w float32) {
 }
 
 func (d *dcfrPolicy) GetAverageStrategy() []float32 {
-	infoSet := d.node.InfoSet(d.node.Player())
 	nChildren := d.node.NumChildren()
-
-	modelPredictions := make([][]float32, len(d.models))
-	for i, model := range d.models {
-		modelPredictions[i] = regretMatching(model.Predict(infoSet, nChildren))
+	if nChildren == 1 {
+		return []float32{1.0}
 	}
 
+	var modelPredictions [][]float32
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		modelPredictions = d.getModelPredictions()
+		wg.Done()
+	}()
+
+	var modelWeights []float32
+	wg.Add(1)
+	go func() {
+		modelWeights = d.getModelWeights()
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	result := make([]float32, nChildren)
+	for t, w := range modelWeights {
+		f32.AxpyUnitary(w, modelPredictions[t], result)
+	}
+
+	return result
+}
+
+func (d *dcfrPolicy) getModelPredictions() [][]float32 {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	modelPredictions := make([][]float32, len(d.models))
+	infoSet := d.node.InfoSet(d.node.Player())
+	nChildren := d.node.NumChildren()
+	for i, model := range d.models {
+		wg.Add(1)
+		go func(i int, model TrainedModel) {
+			result := regretMatching(model.Predict(infoSet, nChildren))
+			mu.Lock()
+			modelPredictions[i] = result
+			mu.Unlock()
+			wg.Done()
+		}(i, model)
+	}
+
+	wg.Wait()
+	return modelPredictions
+}
+
+func (d *dcfrPolicy) getModelWeights() []float32 {
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 	modelWeights := make([]float32, len(d.models))
 	for i := range modelWeights {
 		modelWeights[i] = 1.0
@@ -192,29 +240,45 @@ func (d *dcfrPolicy) GetAverageStrategy() []float32 {
 	for node := d.node.Parent(); node != nil; node = node.Parent() {
 		// Figure out which child of parent.
 		childIdx := -1
-		for i := 0; i < node.NumChildren(); i++ {
+		nChildren := node.NumChildren()
+		for i := 0; i < nChildren; i++ {
 			if node.GetChild(i) == lastChild {
 				childIdx = i
 				break
 			}
 		}
 
+		if childIdx == -1 {
+			panic(fmt.Errorf(
+				"failed to identify action leading to history! node: %v, lastChild: %v",
+				node, lastChild))
+		}
+
 		if node.Player() == d.node.Player() {
+			infoSet := node.InfoSet(node.Player())
 			for i, model := range d.models {
-				strategy := regretMatching(model.Predict(infoSet, nChildren))
-				modelWeights[i] *= strategy[childIdx]
+				wg.Add(1)
+				go func(i int, model TrainedModel) {
+					strategy := regretMatching(model.Predict(infoSet, nChildren))
+					mu.Lock()
+					modelWeights[i] *= strategy[childIdx]
+					mu.Unlock()
+					wg.Done()
+				}(i, model)
 			}
 		}
 
 		lastChild = node
 	}
 
-	result := make([]float32, nChildren)
-	for i, w := range modelWeights {
-		f32.AxpyUnitary(w, modelPredictions[i], result)
-	}
+	wg.Wait()
 
-	return result
+	var normalization float32
+	for t, w := range modelWeights {
+		normalization += float32(t+1) * w
+	}
+	f32.ScalUnitary(1.0/normalization, modelWeights)
+	return modelWeights
 }
 
 func regretMatching(advantages []float32) []float32 {
