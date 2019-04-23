@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/golang/glog"
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
@@ -201,6 +202,7 @@ func (d *dcfrPolicy) GetAverageStrategy() []float32 {
 
 	result := make([]float32, nChildren)
 	for t, w := range modelWeights {
+		glog.V(3).Infof("[t=%d] Weight: %v, Strategy: %v", t, w, modelPredictions[t])
 		f32.AxpyUnitary(w, modelPredictions[t], result)
 	}
 
@@ -216,7 +218,9 @@ func (d *dcfrPolicy) getModelPredictions() [][]float32 {
 	for i, model := range d.models {
 		wg.Add(1)
 		go func(i int, model TrainedModel) {
-			result := regretMatching(model.Predict(infoSet, nChildren))
+			advantages := model.Predict(infoSet, nChildren)
+			glog.V(3).Infof("[t=%d] Advantages: %v", i, advantages)
+			result := regretMatching(advantages)
 			mu.Lock()
 			modelPredictions[i] = result
 			mu.Unlock()
@@ -233,7 +237,7 @@ func (d *dcfrPolicy) getModelWeights() []float32 {
 	var wg sync.WaitGroup
 	modelWeights := make([]float32, len(d.models))
 	for i := range modelWeights {
-		modelWeights[i] = 1.0
+		modelWeights[i] = float32(i + 1)
 	}
 
 	lastChild := d.node
@@ -254,7 +258,7 @@ func (d *dcfrPolicy) getModelWeights() []float32 {
 				node, lastChild))
 		}
 
-		if node.Player() == d.node.Player() {
+		if node.Type() == cfr.PlayerNodeType && node.Player() == d.node.Player() {
 			infoSet := node.InfoSet(node.Player())
 			for i, model := range d.models {
 				wg.Add(1)
@@ -273,10 +277,7 @@ func (d *dcfrPolicy) getModelWeights() []float32 {
 
 	wg.Wait()
 
-	var normalization float32
-	for t, w := range modelWeights {
-		normalization += float32(t+1) * w
-	}
+	normalization := f32.Sum(modelWeights)
 	f32.ScalUnitary(1.0/normalization, modelWeights)
 	return modelWeights
 }
