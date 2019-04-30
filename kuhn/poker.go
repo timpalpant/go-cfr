@@ -8,6 +8,8 @@ import (
 	"math/rand"
 	"strings"
 
+	"github.com/cespare/xxhash"
+
 	"github.com/timpalpant/go-cfr"
 )
 
@@ -171,12 +173,12 @@ type pokerInfoSet struct {
 	card    string
 }
 
-func (p pokerInfoSet) Key() string {
-	return p.history + "-" + p.card
+func (p pokerInfoSet) Key() uint64 {
+	return xxhash.Sum64String(p.history + "-" + p.card)
 }
 
 func (p pokerInfoSet) MarshalBinary() ([]byte, error) {
-	return []byte(p.Key()), nil
+	return []byte(p.history + "-" + p.card), nil
 }
 
 func (p *pokerInfoSet) UnmarshalBinary(buf []byte) error {

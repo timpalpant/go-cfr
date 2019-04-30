@@ -19,7 +19,7 @@ type PolicyTable struct {
 	iter   int
 
 	// Map of InfoSet Key -> policy for that infoset.
-	policiesByKey map[string]*policy.Policy
+	policiesByKey map[uint64]*policy.Policy
 	mayNeedUpdate map[*policy.Policy]struct{}
 }
 
@@ -28,7 +28,7 @@ func NewPolicyTable(params DiscountParams) *PolicyTable {
 	return &PolicyTable{
 		params:        params,
 		iter:          1,
-		policiesByKey: make(map[string]*policy.Policy),
+		policiesByKey: make(map[uint64]*policy.Policy),
 		mayNeedUpdate: make(map[*policy.Policy]struct{}),
 	}
 }
@@ -90,9 +90,9 @@ func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	pt.policiesByKey = make(map[string]*policy.Policy, nStrategies)
+	pt.policiesByKey = make(map[uint64]*policy.Policy, nStrategies)
 	for i := int64(0); i < nStrategies; i++ {
-		var key string
+		var key uint64
 		if err := dec.Decode(&key); err != nil {
 			return err
 		}

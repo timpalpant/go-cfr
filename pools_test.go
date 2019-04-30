@@ -13,9 +13,9 @@ func BenchmarkFloatSlicePoolAllocFree(b *testing.B) {
 	}
 }
 
-// BenchmarkStringIntMapPoolAllocFree-24    	200000000	         7.99 ns/op
-func BenchmarkStringIntMapPoolAllocFree(b *testing.B) {
-	pool := &stringIntMapPool{}
+// BenchmarkKeyIntMapPoolAllocFree-24    	200000000	         7.99 ns/op
+func BenchmarkKeyIntMapPoolAllocFree(b *testing.B) {
+	pool := &keyIntMapPool{}
 	for i := 0; i < b.N; i++ {
 		v := pool.alloc()
 		pool.free(v)

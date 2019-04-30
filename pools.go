@@ -21,11 +21,11 @@ func (p *floatSlicePool) free(s []float32) {
 	}
 }
 
-type stringIntMapPool struct {
-	pool []map[string]int
+type keyIntMapPool struct {
+	pool []map[uint64]int
 }
 
-func (p *stringIntMapPool) alloc() map[string]int {
+func (p *keyIntMapPool) alloc() map[uint64]int {
 	if len(p.pool) > 0 {
 		m := len(p.pool)
 		next := p.pool[m-1]
@@ -33,10 +33,10 @@ func (p *stringIntMapPool) alloc() map[string]int {
 		return next
 	}
 
-	return make(map[string]int)
+	return make(map[uint64]int)
 }
 
-func (p *stringIntMapPool) free(m map[string]int) {
+func (p *keyIntMapPool) free(m map[uint64]int) {
 	for k := range m {
 		delete(m, k)
 	}

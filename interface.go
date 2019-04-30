@@ -18,11 +18,7 @@ const (
 type InfoSet interface {
 	// Key is an identifier used to uniquely look up this InfoSet
 	// when accumulating probabilities in tabular CFR.
-	//
-	// It may be an arbitrary string of bytes and does not need to be
-	// human-readable. For example, it could be a simplified abstraction
-	// or hash of the full game history.
-	Key() string
+	Key() uint64
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 }

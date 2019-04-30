@@ -21,11 +21,11 @@ type GeneralizedSamplingCFR struct {
 	sampler         Sampler
 
 	slicePool *floatSlicePool
-	mapPool   *stringIntMapPool
+	mapPool   *keyIntMapPool
 	rng       *rand.Rand
 
 	traversingPlayer int
-	sampledActions   map[string]int
+	sampledActions   map[uint64]int
 }
 
 func NewGeneralizedSampling(strategyProfile StrategyProfile, sampler Sampler) *GeneralizedSamplingCFR {
@@ -33,7 +33,7 @@ func NewGeneralizedSampling(strategyProfile StrategyProfile, sampler Sampler) *G
 		strategyProfile: strategyProfile,
 		sampler:         sampler,
 		slicePool:       &floatSlicePool{},
-		mapPool:         &stringIntMapPool{},
+		mapPool:         &keyIntMapPool{},
 		rng:             rand.New(rand.NewSource(rand.Int63())),
 	}
 }
@@ -153,7 +153,7 @@ func (c *GeneralizedSamplingCFR) probe(node GameTreeNode, player int) float32 {
 	return ev
 }
 
-func getOrSample(sampledActions map[string]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) GameTreeNode {
+func getOrSample(sampledActions map[uint64]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) GameTreeNode {
 	player := node.Player()
 	is := node.InfoSet(player)
 	key := is.Key()

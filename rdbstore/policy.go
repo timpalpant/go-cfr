@@ -2,6 +2,7 @@ package rdbstore
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/gob"
 
 	"github.com/golang/glog"
@@ -147,9 +148,12 @@ func (pt *PolicyTable) Update() {
 
 // GetPolicy implements cfr.StrategyProfile.
 func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
-	key := []byte(node.InfoSet(node.Player()).Key())
+	key := node.InfoSet(node.Player()).Key()
 	policy := policy.New(node.NumChildren())
-	result, err := pt.db.Get(pt.params.ReadOptions, key)
+
+	var keyBuf [8]byte
+	binary.LittleEndian.PutUint64(keyBuf[:], key)
+	result, err := pt.db.Get(pt.params.ReadOptions, keyBuf[:])
 	if err != nil {
 		panic(err)
 	}
@@ -174,7 +178,7 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 type ldbPolicy struct {
 	*policy.Policy
 	db    *rocksdb.DB
-	key   []byte
+	key   uint64
 	wOpts *rocksdb.WriteOptions
 }
 
@@ -196,7 +200,10 @@ func (l *ldbPolicy) save() {
 		panic(err)
 	}
 
-	if err := l.db.Put(l.wOpts, l.key, buf); err != nil {
+	var keyBuf [8]byte
+	binary.LittleEndian.PutUint64(keyBuf[:], l.key)
+
+	if err := l.db.Put(l.wOpts, keyBuf[:], buf); err != nil {
 		panic(err)
 	}
 }
