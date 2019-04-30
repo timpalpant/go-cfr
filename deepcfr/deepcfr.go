@@ -241,25 +241,11 @@ func (d *dcfrPolicy) getModelWeights() []float32 {
 	}
 
 	lastChild := d.node
-	for node := d.node.Parent(); node != nil; node = node.Parent() {
-		// Figure out which child of parent.
-		childIdx := -1
-		nChildren := node.NumChildren()
-		for i := 0; i < nChildren; i++ {
-			if node.GetChild(i) == lastChild {
-				childIdx = i
-				break
-			}
-		}
-
-		if childIdx == -1 {
-			panic(fmt.Errorf(
-				"failed to identify action leading to history! node: %v, lastChild: %v",
-				node, lastChild))
-		}
-
-		if node.Type() == cfr.PlayerNodeType && node.Player() == d.node.Player() {
-			infoSet := node.InfoSet(node.Player())
+	for ancestor := d.node.Parent(); ancestor != nil; ancestor = ancestor.Parent() {
+		if ancestor.Type() == cfr.PlayerNodeType && ancestor.Player() == d.node.Player() {
+			nChildren := ancestor.NumChildren()
+			childIdx := childIndex(ancestor, lastChild)
+			infoSet := ancestor.InfoSet(ancestor.Player())
 			for i, model := range d.models {
 				wg.Add(1)
 				go func(i int, model TrainedModel) {
@@ -272,7 +258,7 @@ func (d *dcfrPolicy) getModelWeights() []float32 {
 			}
 		}
 
-		lastChild = node
+		lastChild = ancestor
 	}
 
 	wg.Wait()
@@ -280,6 +266,31 @@ func (d *dcfrPolicy) getModelWeights() []float32 {
 	normalization := f32.Sum(modelWeights)
 	f32.ScalUnitary(1.0/normalization, modelWeights)
 	return modelWeights
+}
+
+func childIndex(parent, child cfr.GameTreeNode) int {
+	childIdx := -1
+	nChildren := parent.NumChildren()
+	for i := 0; i < nChildren; i++ {
+		if parent.GetChild(i) == child {
+			childIdx = i
+			break
+		}
+	}
+
+	if childIdx == -1 {
+		var children string
+		for i := 0; i < nChildren; i++ {
+			child := parent.GetChild(i)
+			children += fmt.Sprintf("\t%d: (%p) %v\n", i, child, child)
+		}
+		panic(fmt.Errorf(
+			"failed to identify action leading to history!\n\n"+
+				"node(%p): %v\nlastChild(%p): %v\nnode children:\n%v",
+			parent, parent, child, child, children))
+	}
+
+	return childIdx
 }
 
 func regretMatching(advantages []float32) []float32 {
