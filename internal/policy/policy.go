@@ -7,7 +7,7 @@ import (
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
-// Policy implements cfr.Policy by keeping a table of
+// Policy implements cfr.NodePolicy by keeping a table of
 // accumulated regrets and strategies.
 type Policy struct {
 	currentStrategy       []float32
@@ -17,9 +17,9 @@ type Policy struct {
 	strategySum []float32
 }
 
-// NewPolicy returns a new NodePolicy for a game node with the given number of actions.
-func New(nActions int) *Policy {
-	return &Policy{
+// NewPolicy returns a new Policy for a game node with the given number of actions.
+func New(nActions int) Policy {
+	return Policy{
 		currentStrategy:       uniformDist(nActions),
 		currentStrategyWeight: 0.0,
 		regretSum:             make([]float32, nActions),
