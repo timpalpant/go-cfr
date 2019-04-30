@@ -18,10 +18,9 @@ type PolicyTable struct {
 	params DiscountParams
 	iter   int
 
-	policies []policy.Policy
-	// Map of InfoSet Key -> index of the policy for that infoset.
-	policiesByKey map[uint64]int
-	mayNeedUpdate []int
+	// Map of InfoSet Key -> the policy for that infoset.
+	policiesByKey map[string]*policy.Policy
+	mayNeedUpdate map[*policy.Policy]struct{}
 }
 
 // NewPolicyTable creates a new PolicyTable with the given DiscountParams.
@@ -29,7 +28,8 @@ func NewPolicyTable(params DiscountParams) *PolicyTable {
 	return &PolicyTable{
 		params:        params,
 		iter:          1,
-		policiesByKey: make(map[uint64]int),
+		policiesByKey: make(map[string]*policy.Policy),
+		mayNeedUpdate: make(map[*policy.Policy]struct{}),
 	}
 }
 
@@ -37,11 +37,11 @@ func NewPolicyTable(params DiscountParams) *PolicyTable {
 // been touched since the lapt call to Update().
 func (pt *PolicyTable) Update() {
 	discountPos, discountNeg, discountSum := pt.params.GetDiscountFactors(pt.iter)
-	for idx := range pt.mayNeedUpdate {
-		pt.policies[idx].NextStrategy(discountPos, discountNeg, discountSum)
+	for p := range pt.mayNeedUpdate {
+		p.NextStrategy(discountPos, discountNeg, discountSum)
+		delete(pt.mayNeedUpdate, p)
 	}
 
-	pt.mayNeedUpdate = pt.mayNeedUpdate[:0]
 	pt.iter++
 }
 
@@ -58,18 +58,17 @@ func (pt *PolicyTable) GetPolicy(node GameTreeNode) NodePolicy {
 	is := node.InfoSet(p)
 	key := is.Key()
 
-	idx, ok := pt.policiesByKey[key]
+	np, ok := pt.policiesByKey[key]
 	if !ok {
-		np := policy.New(node.NumChildren())
-		idx = len(pt.policies)
-		pt.policies = append(pt.policies, np)
-	} else if pt.policies[idx].NumActions() != node.NumChildren() {
+		np = policy.New(node.NumChildren())
+		pt.policiesByKey[key] = np
+	} else if np.NumActions() != node.NumChildren() {
 		panic(fmt.Errorf("strategy has n_actions=%v but node has n_children=%v: %v",
-			pt.policies[idx].NumActions(), node.NumChildren(), node))
+			np.NumActions(), node.NumChildren(), node))
 	}
 
-	pt.mayNeedUpdate = append(pt.mayNeedUpdate, idx)
-	return &pt.policies[idx]
+	pt.mayNeedUpdate[np] = struct{}{}
+	return np
 }
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler.
@@ -89,9 +88,9 @@ func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	pt.policiesByKey = make(map[uint64]int, nStrategies)
+	pt.policiesByKey = make(map[string]*policy.Policy, nStrategies)
 	for i := 0; i < nStrategies; i++ {
-		var key uint64
+		var key string
 		if err := dec.Decode(&key); err != nil {
 			return err
 		}
@@ -101,10 +100,10 @@ func (pt *PolicyTable) UnmarshalBinary(buf []byte) error {
 			return err
 		}
 
-		pt.policies = append(pt.policies, p)
-		pt.policiesByKey[key] = i
+		pt.policiesByKey[key] = &p
 	}
 
+	pt.mayNeedUpdate = make(map[*policy.Policy]struct{})
 	return nil
 }
 

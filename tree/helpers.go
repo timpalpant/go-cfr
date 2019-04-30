@@ -15,7 +15,7 @@ func Visit(root cfr.GameTreeNode, visitor func(node cfr.GameTreeNode)) {
 }
 
 func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet cfr.InfoSet)) {
-	seen := make(map[uint64]struct{})
+	seen := make(map[string]struct{})
 	Visit(root, func(node cfr.GameTreeNode) {
 		if node.Type() == cfr.PlayerNodeType {
 			player := node.Player()

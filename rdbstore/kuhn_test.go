@@ -60,7 +60,7 @@ type cfrImpl interface {
 
 func testCFR(t *testing.T, opt cfrImpl, policy cfr.StrategyProfile, nIter int) {
 	root := runCFR(t, opt, policy, nIter)
-	seen := make(map[uint64]struct{})
+	seen := make(map[string]struct{})
 	tree.Visit(root, func(node cfr.GameTreeNode) {
 		if node.Type() != cfr.PlayerNodeType {
 			return

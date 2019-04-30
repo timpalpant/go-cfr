@@ -1,6 +1,7 @@
 package cfr
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/timpalpant/go-cfr/internal/f32"
@@ -25,7 +26,7 @@ type GeneralizedSamplingCFR struct {
 	rng       *rand.Rand
 
 	traversingPlayer int
-	sampledActions   map[uint64]int
+	sampledActions   map[string]int
 }
 
 func NewGeneralizedSampling(strategyProfile StrategyProfile, sampler Sampler) *GeneralizedSamplingCFR {
@@ -153,7 +154,7 @@ func (c *GeneralizedSamplingCFR) probe(node GameTreeNode, player int) float32 {
 	return ev
 }
 
-func getOrSample(sampledActions map[uint64]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) GameTreeNode {
+func getOrSample(sampledActions map[string]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) GameTreeNode {
 	player := node.Player()
 	is := node.InfoSet(player)
 	key := is.Key()
@@ -163,6 +164,11 @@ func getOrSample(sampledActions map[uint64]int, node GameTreeNode, policy NodePo
 		x := rng.Float32()
 		selected = sampleOne(policy.GetStrategy(), x)
 		sampledActions[key] = selected
+	}
+
+	if selected >= node.NumChildren() {
+		panic(fmt.Errorf("sampled action: %d but node has %d children! node: %v, policy: %v",
+			selected, node.NumChildren(), node, policy))
 	}
 
 	return node.GetChild(selected)

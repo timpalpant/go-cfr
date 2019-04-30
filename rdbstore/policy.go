@@ -2,7 +2,6 @@ package rdbstore
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/gob"
 
 	"github.com/golang/glog"
@@ -151,9 +150,7 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	key := node.InfoSet(node.Player()).Key()
 	policy := policy.New(node.NumChildren())
 
-	var keyBuf [8]byte
-	binary.LittleEndian.PutUint64(keyBuf[:], key)
-	result, err := pt.db.Get(pt.params.ReadOptions, keyBuf[:])
+	result, err := pt.db.Get(pt.params.ReadOptions, []byte(key))
 	if err != nil {
 		panic(err)
 	}
@@ -168,7 +165,7 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	return &ldbPolicy{
 		Policy: policy,
 		db:     pt.db,
-		key:    key,
+		key:    []byte(key),
 		wOpts:  pt.params.WriteOptions,
 	}
 }
@@ -178,7 +175,7 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 type ldbPolicy struct {
 	*policy.Policy
 	db    *rocksdb.DB
-	key   uint64
+	key   []byte
 	wOpts *rocksdb.WriteOptions
 }
 
@@ -200,10 +197,7 @@ func (l *ldbPolicy) save() {
 		panic(err)
 	}
 
-	var keyBuf [8]byte
-	binary.LittleEndian.PutUint64(keyBuf[:], l.key)
-
-	if err := l.db.Put(l.wOpts, keyBuf[:], buf); err != nil {
+	if err := l.db.Put(l.wOpts, l.key, buf); err != nil {
 		panic(err)
 	}
 }

@@ -18,8 +18,8 @@ type Policy struct {
 }
 
 // NewPolicy returns a new Policy for a game node with the given number of actions.
-func New(nActions int) Policy {
-	return Policy{
+func New(nActions int) *Policy {
+	return &Policy{
 		currentStrategy:       uniformDist(nActions),
 		currentStrategyWeight: 0.0,
 		regretSum:             make([]float32, nActions),
