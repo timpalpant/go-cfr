@@ -89,6 +89,8 @@ type StrategyProfile interface {
 	// Get the current iteration (number of times update has been called).
 	Iter() int
 
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
 	io.Closer
 }
 
