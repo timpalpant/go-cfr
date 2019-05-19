@@ -49,7 +49,7 @@ func TestPoker_ChanceSamplingCFR(t *testing.T) {
 func TestPoker_ExternalSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	es := sampling.NewExternalSampler()
-	opt := cfr.NewGeneralizedSampling(policy, es)
+	opt := cfr.NewMCCFR(policy, es)
 	testCFR(t, opt, policy, 200000)
 }
 
@@ -68,7 +68,7 @@ func TestPoker_AverageStrategySamplingCFR(t *testing.T) {
 		Tau:     1000,
 	}
 	as := sampling.NewAverageStrategySampler(params)
-	opt := cfr.NewGeneralizedSampling(policy, as)
+	opt := cfr.NewMCCFR(policy, as)
 	testCFR(t, opt, policy, 200000)
 }
 
