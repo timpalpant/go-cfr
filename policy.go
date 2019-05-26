@@ -53,11 +53,14 @@ func (pt *PolicyTable) Close() error {
 	return nil
 }
 
-func (pt *PolicyTable) GetPolicy(node GameTreeNode) NodePolicy {
+func nodeKey(node GameTreeNode) string {
 	p := node.Player()
 	is := node.InfoSet(p)
-	key := is.Key()
+	return is.Key()
+}
 
+func (pt *PolicyTable) GetPolicy(node GameTreeNode) NodePolicy {
+	key := nodeKey(node)
 	np, ok := pt.policiesByKey[key]
 	if !ok {
 		np = policy.New(node.NumChildren())
