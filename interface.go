@@ -114,3 +114,30 @@ type NodePolicy interface {
 	// GetAverageStrategy returns the average strategy over all iterations.
 	GetAverageStrategy() []float32
 }
+
+type OnlinePolicy interface {
+	// GetPolicy returns the OnlineNodePolicy for the given node.
+	GetPolicy(node GameTreeNode) OnlineNodePolicy
+
+	// Calculate the next strategy profile for all visited nodes.
+	Update()
+	// Get the current iteration (number of times update has been called).
+	Iter() int
+
+	// GetAverageStrategy returns the average strategy profile.
+	GetAverageStrategy() StrategyProfile
+
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+	io.Closer
+}
+
+// NodePolicy maintains the action policy for a single Player node.
+type OnlineNodePolicy interface {
+	// AddRegret provides new observed instantaneous regrets
+	// to add to the total accumulated regret with the given weight.
+	AddExperienceTuple(w float32, action int, value, regret float32)
+	// GetStrategy gets the current vector of probabilities with which the ith
+	// available action should be played.
+	GetStrategy() []float32
+}
