@@ -13,6 +13,8 @@ type Policy struct {
 	currentStrategy       []float32
 	currentStrategyWeight float32
 
+	baseline []float32
+
 	regretSum   []float32
 	strategySum []float32
 }
@@ -22,6 +24,7 @@ func New(nActions int) *Policy {
 	return &Policy{
 		currentStrategy:       uniformDist(nActions),
 		currentStrategyWeight: 0.0,
+		baseline:              make([]float32, nActions),
 		regretSum:             make([]float32, nActions),
 		strategySum:           make([]float32, nActions),
 	}
@@ -85,6 +88,14 @@ func (p *Policy) GetStrategySum() []float32 {
 	return p.strategySum
 }
 
+func (p *Policy) GetBaseline() []float32 {
+	return p.baseline
+}
+
+func (p *Policy) SetBaseline(v []float32) {
+	copy(p.baseline, v)
+}
+
 func (p *Policy) NumActions() int {
 	return len(p.regretSum)
 }
@@ -105,7 +116,7 @@ func (p *Policy) regretMatching() {
 // UnmarshalBinary implements encoding.BinaryUnmarshaler.
 func (p *Policy) UnmarshalBinary(buf []byte) error {
 	nFloats := len(buf) / 4
-	nActions := (nFloats - 1) / 3
+	nActions := (nFloats - 1) / 4
 
 	p.currentStrategyWeight = decodeF32(buf[:4])
 	buf = buf[4:]
@@ -117,6 +128,9 @@ func (p *Policy) UnmarshalBinary(buf []byte) error {
 	buf = buf[4*nActions:]
 
 	p.strategySum = decodeF32s(buf[:4*nActions])
+	buf = buf[4*nActions:]
+
+	p.baseline = decodeF32s(buf[:4*nActions])
 
 	return nil
 }
@@ -124,7 +138,7 @@ func (p *Policy) UnmarshalBinary(buf []byte) error {
 // MarshalBinary implements encoding.BinaryMarshaler.
 func (p *Policy) MarshalBinary() ([]byte, error) {
 	nActions := len(p.regretSum)
-	nBytes := 4 * (3*nActions + 1)
+	nBytes := 4 * (4*nActions + 1)
 	result := make([]byte, nBytes)
 
 	putF32(result, p.currentStrategyWeight)
@@ -138,6 +152,8 @@ func (p *Policy) MarshalBinary() ([]byte, error) {
 
 	putF32s(buf, p.strategySum)
 	buf = buf[4*nActions:]
+
+	putF32s(buf, p.baseline)
 
 	return result, nil
 }

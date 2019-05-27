@@ -103,6 +103,12 @@ type NodePolicy interface {
 	// available action should be played.
 	GetStrategy() []float32
 
+	// GetBaseline gets the current vector of action-dependend baseline values,
+	// used in VR-MCCFR.
+	GetBaseline() []float32
+	// SetBaseline updates the current vector of baseline values.
+	SetBaseline(u []float32)
+
 	// AddStrategyWeight adds the current strategy with weight w to the average.
 	AddStrategyWeight(w float32)
 	// GetAverageStrategy returns the average strategy over all iterations.

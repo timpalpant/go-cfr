@@ -46,6 +46,14 @@ func (d *sampledDCFRPolicy) GetStrategy() []float32 {
 	return d.strategy
 }
 
+func (d *sampledDCFRPolicy) GetBaseline() []float32 {
+	return make([]float32, d.node.NumChildren())
+}
+
+func (d *sampledDCFRPolicy) SetBaseline(v []float32) {
+	panic("cannot update baseline of sampled SD-CFR model")
+}
+
 func (d *sampledDCFRPolicy) AddStrategyWeight(w float32) {
 	panic("cannot add strategy weight to sampled SD-CFR model")
 }

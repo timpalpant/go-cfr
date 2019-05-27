@@ -9,7 +9,6 @@ import (
 type VRMCCFR struct {
 	strategyProfile StrategyProfile
 	sampler         Sampler
-	baselines       map[string][]float32
 	decayAlpha      float32
 
 	slicePool *floatSlicePool
@@ -22,7 +21,6 @@ func NewVRMCCFR(strategyProfile StrategyProfile, sampler Sampler, decayAlpha flo
 	return &VRMCCFR{
 		strategyProfile: strategyProfile,
 		sampler:         sampler,
-		baselines:       make(map[string][]float32),
 		decayAlpha:      decayAlpha,
 		slicePool:       &floatSlicePool{},
 		rng:             rand.New(rand.NewSource(rand.Int63())),
@@ -74,8 +72,8 @@ func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float
 		return c.runHelper(child, player, sampleProb)
 	}
 
-	baseline := c.getBaseline(node)
 	policy := c.strategyProfile.GetPolicy(node)
+	baseline := policy.GetBaseline()
 	qs := c.slicePool.alloc(nChildren)
 	copy(qs, c.sampler.Sample(node, policy))
 	regrets := c.slicePool.alloc(nChildren)
@@ -91,6 +89,7 @@ func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float
 		regrets[i] = u
 	}
 
+	policy.SetBaseline(baseline)
 	cfValue := f32.DotUnitary(policy.GetStrategy(), regrets)
 	f32.AddConst(-cfValue, regrets)
 	policy.AddRegret(1.0/sampleProb, regrets)
@@ -117,8 +116,9 @@ func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32)
 	child := node.GetChild(selected)
 	result := c.runHelper(child, node.Player(), sampleProb)
 
-	baseline := c.getBaseline(node)
+	baseline := policy.GetBaseline()
 	c.updateBaseline(baseline, selected, result)
+	policy.SetBaseline(baseline)
 
 	return result
 }
@@ -126,15 +126,4 @@ func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32)
 func (c *VRMCCFR) updateBaseline(baseline []float32, i int, value float32) {
 	baseline[i] *= (1 - c.decayAlpha)
 	baseline[i] += c.decayAlpha * value
-}
-
-func (c *VRMCCFR) getBaseline(node GameTreeNode) []float32 {
-	key := nodeKey(node)
-	baseline, ok := c.baselines[key]
-	if !ok {
-		baseline = make([]float32, node.NumChildren())
-		c.baselines[key] = baseline
-	}
-
-	return baseline
 }
