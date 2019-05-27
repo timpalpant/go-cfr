@@ -155,9 +155,10 @@ func (d *dcfrPolicy) currentModel() TrainedModel {
 	return d.models[len(d.models)-1]
 }
 
-func (d *dcfrPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	w *= float32((d.iter + 1) / 2) // Linear CFR.
-	d.buf.AddSample(d.node, instantaneousRegrets, w)
+func (d *dcfrPolicy) AddRegret(weight float32, instantaneousRegrets []float32) {
+	weight *= float32((d.iter + 1) / 2) // Linear CFR.
+	sample := NewRegretSample(d.node, instantaneousRegrets, weight)
+	d.buf.AddSample(sample)
 }
 
 func (d *dcfrPolicy) GetStrategy() []float32 {

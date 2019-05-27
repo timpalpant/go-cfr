@@ -1,14 +1,20 @@
 package deepcfr
 
 import (
+	"encoding"
 	"io"
 
 	"github.com/timpalpant/go-cfr"
 )
 
+type Sample interface {
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+}
+
 // Buffer collects samples of infoset action advantages to train a Model.
 type Buffer interface {
-	AddSample(node cfr.GameTreeNode, advantages []float32, weight float32)
+	AddSample(Sample)
 	GetSamples() []Sample
 	io.Closer
 }

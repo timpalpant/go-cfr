@@ -9,7 +9,6 @@ import (
 
 	rocksdb "github.com/tecbot/gorocksdb"
 
-	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/deepcfr"
 )
 
@@ -49,18 +48,16 @@ func (b *ReservoirBuffer) Close() error {
 }
 
 // AddSample implements deepcfr.Buffer.
-func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32, weight float32) {
+func (b *ReservoirBuffer) AddSample(s deepcfr.Sample) {
 	b.mx.Lock()
 	defer b.mx.Unlock()
 	b.n++
 
 	if b.n <= b.maxSize {
-		s := deepcfr.NewSample(node, advantages, weight)
 		b.putSample(b.n-1, s)
 	} else {
 		m := rand.Intn(b.n)
 		if m < b.maxSize {
-			s := deepcfr.NewSample(node, advantages, weight)
 			b.putSample(m, s)
 		}
 	}
@@ -71,12 +68,13 @@ func (b *ReservoirBuffer) putSample(idx int, s deepcfr.Sample) {
 	m := binary.PutUvarint(buf[:], uint64(idx))
 	key := buf[:m]
 
-	value, err := s.MarshalBinary()
-	if err != nil {
+	var value bytes.Buffer
+	enc := gob.NewEncoder(&value)
+	if err := enc.Encode(s); err != nil {
 		panic(err)
 	}
 
-	if err := b.db.Put(b.params.WriteOptions, key, value); err != nil {
+	if err := b.db.Put(b.params.WriteOptions, key, value.Bytes()); err != nil {
 		panic(err)
 	}
 }
@@ -88,8 +86,10 @@ func (b *ReservoirBuffer) GetSamples() []deepcfr.Sample {
 
 	var samples []deepcfr.Sample
 	for it.SeekToFirst(); it.Valid(); it.Next() {
+		r := bytes.NewReader(it.Value().Data())
+		dec := gob.NewDecoder(r)
 		var sample deepcfr.Sample
-		if err := sample.UnmarshalBinary(it.Value().Data()); err != nil {
+		if err := dec.Decode(&sample); err != nil {
 			panic(err)
 		}
 

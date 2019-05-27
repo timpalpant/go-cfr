@@ -5,8 +5,6 @@ import (
 	"encoding/gob"
 	"sync"
 	"sync/atomic"
-
-	"github.com/timpalpant/go-cfr"
 )
 
 // ReservoirBuffer is a collection of samples held in memory.
@@ -40,7 +38,7 @@ func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
 }
 
 // AddSample implements Buffer.
-func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32, weight float32) {
+func (b *ReservoirBuffer) AddSample(sample Sample) {
 	// We a are a little bit sloppy here for improved performance:
 	// Because we do not hold a lock for the duration of the call, it is possible
 	// for an earlier call to AddSample to collide and overwrite a later call
@@ -48,12 +46,10 @@ func (b *ReservoirBuffer) AddSample(node cfr.GameTreeNode, advantages []float32,
 	n := int(atomic.AddInt64(&b.n, 1))
 
 	if n <= b.maxSize {
-		sample := NewSample(node, advantages, weight)
 		b.mx.Lock()
 		b.samples[n-1] = sample
 		b.mx.Unlock()
 	} else if m := b.rngPool.Intn(n); m < b.maxSize {
-		sample := NewSample(node, advantages, weight)
 		b.mx.Lock()
 		b.samples[m] = sample
 		b.mx.Unlock()
