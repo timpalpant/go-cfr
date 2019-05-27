@@ -15,7 +15,7 @@ type Buffer interface {
 
 // Model is a regression model that can be used to fit the given samples.
 type Model interface {
-	Train(samples Buffer) TrainedModel
+	Train(samples []Sample) TrainedModel
 }
 
 // TrainedModel is a regression model to use in DeepCFR that predicts

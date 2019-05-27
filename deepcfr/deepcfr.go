@@ -55,7 +55,8 @@ func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 func (d *DeepCFR) Update() {
 	player := d.currentPlayer()
 	buf := d.buffers[player]
-	trained := d.model.Train(buf)
+	samples := buf.GetSamples()
+	trained := d.model.Train(samples)
 	d.trainedModels[player] = append(d.trainedModels[player], trained)
 
 	d.iter++
@@ -173,6 +174,12 @@ func (d *dcfrPolicy) GetStrategy() []float32 {
 
 	return d.currentStrategy
 }
+
+func (d *dcfrPolicy) GetBaseline() []float32 {
+	return make([]float32, d.node.NumChildren())
+}
+
+func (d *dcfrPolicy) SetBaseline(v []float32) {}
 
 func (d *dcfrPolicy) AddStrategyWeight(w float32) {
 }
