@@ -19,12 +19,9 @@ type ReservoirBuffer struct {
 	mx          sync.Mutex
 	maxSize     int
 	maxParallel int
-	// "Better to eat the extra cost of a few bytes per Sample,
-	// than to starve on the GC of a million pointers."
-	//    - Go Proverb
-	samples []Sample
-	n       int64
-	rngPool randPool
+	samples     []Sample
+	n           int64
+	rngPool     randPool
 }
 
 // NewBuffer returns an empty Buffer with the given max size.
@@ -54,6 +51,17 @@ func (b *ReservoirBuffer) AddSample(sample Sample) {
 		b.samples[m] = sample
 		b.mx.Unlock()
 	}
+}
+
+// GetSample implements Buffer.
+func (b *ReservoirBuffer) GetSample(idx int) Sample {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+	return b.samples[idx]
+}
+
+func (b *ReservoirBuffer) Len() int {
+	return int(atomic.LoadInt64(&b.n))
 }
 
 // GetSamples implements Buffer.

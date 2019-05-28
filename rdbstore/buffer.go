@@ -63,6 +63,39 @@ func (b *ReservoirBuffer) AddSample(s deepcfr.Sample) {
 	}
 }
 
+// GetSample implements Buffer.
+func (b *ReservoirBuffer) GetSample(idx int) deepcfr.Sample {
+	var buf [binary.MaxVarintLen64]byte
+	m := binary.PutUvarint(buf[:], uint64(idx))
+	key := buf[:m]
+
+	value, err := b.db.Get(b.params.ReadOptions, key)
+	if err != nil {
+		panic(err)
+	}
+	defer value.Free()
+
+	return mustDecodeSample(value.Data())
+}
+
+func mustDecodeSample(buf []byte) deepcfr.Sample {
+	r := bytes.NewReader(buf)
+	dec := gob.NewDecoder(r)
+	var sample deepcfr.Sample
+	if err := dec.Decode(&sample); err != nil {
+		panic(err)
+	}
+
+	return sample
+}
+
+// Len implements Buffer.
+func (b *ReservoirBuffer) Len() int {
+	b.mx.Lock()
+	defer b.mx.Unlock()
+	return b.n
+}
+
 func (b *ReservoirBuffer) putSample(idx int, s deepcfr.Sample) {
 	var buf [binary.MaxVarintLen64]byte
 	m := binary.PutUvarint(buf[:], uint64(idx))
@@ -70,7 +103,7 @@ func (b *ReservoirBuffer) putSample(idx int, s deepcfr.Sample) {
 
 	var value bytes.Buffer
 	enc := gob.NewEncoder(&value)
-	if err := enc.Encode(s); err != nil {
+	if err := enc.Encode(&s); err != nil {
 		panic(err)
 	}
 
@@ -86,13 +119,7 @@ func (b *ReservoirBuffer) GetSamples() []deepcfr.Sample {
 
 	var samples []deepcfr.Sample
 	for it.SeekToFirst(); it.Valid(); it.Next() {
-		r := bytes.NewReader(it.Value().Data())
-		dec := gob.NewDecoder(r)
-		var sample deepcfr.Sample
-		if err := dec.Decode(&sample); err != nil {
-			panic(err)
-		}
-
+		sample := mustDecodeSample(it.Value().Data())
 		samples = append(samples, sample)
 		it.Key().Free()
 		it.Value().Free()

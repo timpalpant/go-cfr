@@ -15,7 +15,9 @@ type Sample interface {
 // Buffer collects samples of infoset action advantages to train a Model.
 type Buffer interface {
 	AddSample(Sample)
+	GetSample(idx int) Sample
 	GetSamples() []Sample
+	Len() int
 	io.Closer
 }
 
