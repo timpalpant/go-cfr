@@ -17,7 +17,7 @@ import (
 // all of the regrets for all infosets is impractical.
 //
 // During CFR iterations, samples are added to the given buffer.
-// When NextIter is called, the model is retrained.
+// When Update is called, the model is retrained.
 type DeepCFR struct {
 	model         Model
 	buffers       []Buffer
@@ -43,21 +43,39 @@ func (d *DeepCFR) currentPlayer() int {
 }
 
 func (d *DeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
+	models := d.trainedModels[node.Player()]
+	var currentModel TrainedModel
+	if len(models) > 0 {
+		currentModel = models[len(models)-1]
+	}
+
 	return &dcfrPolicy{
 		node:   node,
 		buf:    d.buffers[node.Player()],
-		models: d.trainedModels[node.Player()],
-		iter:   d.iter,
+		models: models,
+		currentPolicy: &modelBasedPolicy{
+			node:  node,
+			model: currentModel,
+		},
+		iter: d.iter,
 	}
+}
+
+type advantageModel struct {
+	model TrainedModel
+}
+
+func (m advantageModel) Predict(infoSet cfr.InfoSet, nActions int) []float32 {
+	return regretMatching(m.model.Predict(infoSet, nActions))
 }
 
 // Update implements cfr.StrategyProfile.
 func (d *DeepCFR) Update() {
 	player := d.currentPlayer()
 	buf := d.buffers[player]
-	samples := buf.GetSamples()
-	trained := d.model.Train(samples)
-	d.trainedModels[player] = append(d.trainedModels[player], trained)
+	trained := d.model.Train(buf)
+	model := &advantageModel{trained}
+	d.trainedModels[player] = append(d.trainedModels[player], model)
 
 	d.iter++
 }
@@ -140,19 +158,11 @@ func (d *DeepCFR) UnmarshalBinary(buf []byte) error {
 }
 
 type dcfrPolicy struct {
-	node            cfr.GameTreeNode
-	buf             Buffer
-	models          []TrainedModel
-	currentStrategy []float32
-	iter            int
-}
-
-func (d *dcfrPolicy) currentModel() TrainedModel {
-	if len(d.models) == 0 {
-		return nil
-	}
-
-	return d.models[len(d.models)-1]
+	node          cfr.GameTreeNode
+	buf           Buffer
+	models        []TrainedModel
+	currentPolicy *modelBasedPolicy
+	iter          int
 }
 
 func (d *dcfrPolicy) AddRegret(weight float32, instantaneousRegrets []float32) {
@@ -162,18 +172,7 @@ func (d *dcfrPolicy) AddRegret(weight float32, instantaneousRegrets []float32) {
 }
 
 func (d *dcfrPolicy) GetStrategy() []float32 {
-	if d.currentStrategy == nil {
-		model := d.currentModel()
-		nChildren := d.node.NumChildren()
-		if model == nil {
-			d.currentStrategy = uniformDist(nChildren)
-		} else {
-			infoSet := d.node.InfoSet(d.node.Player())
-			d.currentStrategy = regretMatching(model.Predict(infoSet, nChildren))
-		}
-	}
-
-	return d.currentStrategy
+	return d.currentPolicy.GetStrategy()
 }
 
 func (d *dcfrPolicy) GetBaseline() []float32 {

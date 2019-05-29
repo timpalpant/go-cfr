@@ -115,7 +115,7 @@ type NodePolicy interface {
 	GetAverageStrategy() []float32
 }
 
-type OnlinePolicy interface {
+type OnlineStrategyProfile interface {
 	// GetPolicy returns the OnlineNodePolicy for the given node.
 	GetPolicy(node GameTreeNode) OnlineNodePolicy
 

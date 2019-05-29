@@ -21,45 +21,10 @@ func (d TrajectorySampledSDCFR) Iter() int {
 func (d TrajectorySampledSDCFR) Update() {}
 
 func (d TrajectorySampledSDCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
-	return &sampledDCFRPolicy{
+	return &modelBasedPolicy{
 		node:  node,
 		model: d[node.Player()],
 	}
-}
-
-type sampledDCFRPolicy struct {
-	node     cfr.GameTreeNode
-	model    TrainedModel
-	strategy []float32
-}
-
-func (d *sampledDCFRPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	panic("cannot add regret to sampled SD-CFR model")
-}
-
-func (d *sampledDCFRPolicy) GetStrategy() []float32 {
-	if d.strategy == nil {
-		infoSet := d.node.InfoSet(d.node.Player())
-		d.strategy = regretMatching(d.model.Predict(infoSet, d.node.NumChildren()))
-	}
-
-	return d.strategy
-}
-
-func (d *sampledDCFRPolicy) GetBaseline() []float32 {
-	return make([]float32, d.node.NumChildren())
-}
-
-func (d *sampledDCFRPolicy) SetBaseline(v []float32) {
-	panic("cannot update baseline of sampled SD-CFR model")
-}
-
-func (d *sampledDCFRPolicy) AddStrategyWeight(w float32) {
-	panic("cannot add strategy weight to sampled SD-CFR model")
-}
-
-func (d *sampledDCFRPolicy) GetAverageStrategy() []float32 {
-	return d.GetStrategy()
 }
 
 func sampleModels(models [][]TrainedModel) []TrainedModel {
