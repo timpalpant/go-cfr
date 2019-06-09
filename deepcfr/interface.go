@@ -1,16 +1,14 @@
 package deepcfr
 
 import (
-	"encoding"
 	"io"
 
 	"github.com/timpalpant/go-cfr"
 )
 
-type Sample interface {
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-}
+// Samples must be binary marshalable, but embedding that interface breaks gob decoding.
+// Ref: https://stackoverflow.com/questions/43324919/gob-panics-decoding-an-interface
+type Sample interface{}
 
 // Buffer collects samples of infoset action advantages to train a Model.
 type Buffer interface {
