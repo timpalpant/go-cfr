@@ -105,7 +105,7 @@ func (c *MCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32
 
 	cfValue := f32.DotUnitary(policy.GetStrategy(), regrets)
 	f32.AddConst(-cfValue, regrets)
-	policy.AddRegret(1.0/sampleProb, regrets)
+	policy.AddRegret(1.0/sampleProb, qs, regrets)
 
 	c.slicePool.free(qs)
 	c.slicePool.free(regrets)
@@ -127,11 +127,11 @@ func (c *MCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32) f
 
 	// Sampling probabilities cancel out in the calculation of counterfactual value,
 	// so we don't include them here.
-	child := getOrSample(c.sampledActions, node, policy, c.rng)
+	child := node.GetChild(getOrSample(c.sampledActions, node, policy, c.rng))
 	return c.runHelper(child, node.Player(), sampleProb)
 }
 
-func getOrSample(sampledActions map[string]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) GameTreeNode {
+func getOrSample(sampledActions map[string]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) int {
 	key := nodeKey(node)
 	selected, ok := sampledActions[key]
 	if !ok {
@@ -145,7 +145,7 @@ func getOrSample(sampledActions map[string]int, node GameTreeNode, policy NodePo
 			selected, node.NumChildren(), node, policy))
 	}
 
-	return node.GetChild(selected)
+	return selected
 }
 
 func sampleOne(pv []float32, x float32) int {

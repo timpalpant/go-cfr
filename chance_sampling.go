@@ -77,7 +77,12 @@ func (c *ChanceSamplingCFR) handlePlayerNode(node GameTreeNode, reachP0, reachP1
 	// subtracting out the expected utility over all possible actions.
 	f32.AddConst(-cfValue, regrets)
 	counterFactualP := counterFactualProb(player, reachP0, reachP1, 1.0)
-	policy.AddRegret(counterFactualP, regrets)
+	ones := c.slicePool.alloc(nChildren)
+	defer c.slicePool.free(ones)
+	for i := range ones {
+		ones[i] = 1.0
+	}
+	policy.AddRegret(counterFactualP, ones, regrets)
 	reachP := reachProb(player, reachP0, reachP1, 1.0)
 	policy.AddStrategyWeight(reachP)
 	return cfValue

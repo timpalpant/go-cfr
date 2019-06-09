@@ -61,7 +61,7 @@ func (p *Policy) NextStrategy(discountPositiveRegret, discountNegativeRegret, di
 	p.currentStrategyWeight = 0.0
 }
 
-func (p *Policy) AddRegret(w float32, instantaneousRegrets []float32) {
+func (p *Policy) AddRegret(w float32, samplingQ, instantaneousRegrets []float32) {
 	f32.AxpyUnitary(w, instantaneousRegrets, p.regretSum)
 }
 
@@ -92,8 +92,9 @@ func (p *Policy) GetBaseline() []float32 {
 	return p.baseline
 }
 
-func (p *Policy) SetBaseline(v []float32) {
-	copy(p.baseline, v)
+func (p *Policy) UpdateBaseline(w float32, action int, value float32) {
+	p.baseline[action] *= (1 - w)
+	p.baseline[action] += w * value
 }
 
 func (p *Policy) NumActions() int {

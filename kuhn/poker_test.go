@@ -232,7 +232,7 @@ func TestPoker_DeepCFR(t *testing.T) {
 	gob.Register(model)
 	buf0 := deepcfr.NewReservoirBuffer(10, 1)
 	buf1 := deepcfr.NewReservoirBuffer(10, 1)
-	deepCFR := deepcfr.New(model, []deepcfr.Buffer{buf0, buf1})
+	deepCFR := deepcfr.NewSingleDeepCFR(model, []deepcfr.Buffer{buf0, buf1})
 	root := NewGame()
 	es := sampling.NewExternalSampler()
 	opt := cfr.NewGeneralizedSampling(deepCFR, es)
@@ -263,7 +263,7 @@ func TestPoker_DeepCFR(t *testing.T) {
 	}
 
 	dec := gob.NewDecoder(&buf)
-	var reloaded deepcfr.DeepCFR
+	var reloaded deepcfr.SingleDeepCFR
 	if err := dec.Decode(&reloaded); err != nil {
 		t.Error(err)
 	}

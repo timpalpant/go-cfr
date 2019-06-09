@@ -98,7 +98,7 @@ type StrategyProfile interface {
 type NodePolicy interface {
 	// AddRegret provides new observed instantaneous regrets
 	// to add to the total accumulated regret with the given weight.
-	AddRegret(w float32, instantaneousRegrets []float32)
+	AddRegret(w float32, samplingQ, instantaneousRegrets []float32)
 	// GetStrategy gets the current vector of probabilities with which the ith
 	// available action should be played.
 	GetStrategy() []float32
@@ -106,38 +106,11 @@ type NodePolicy interface {
 	// GetBaseline gets the current vector of action-dependend baseline values,
 	// used in VR-MCCFR.
 	GetBaseline() []float32
-	// SetBaseline updates the current vector of baseline values.
-	SetBaseline(u []float32)
+	// UpdateBaseline updates the current vector of baseline values.
+	UpdateBaseline(w float32, action int, value float32)
 
 	// AddStrategyWeight adds the current strategy with weight w to the average.
 	AddStrategyWeight(w float32)
 	// GetAverageStrategy returns the average strategy over all iterations.
 	GetAverageStrategy() []float32
-}
-
-type OnlineStrategyProfile interface {
-	// GetPolicy returns the OnlineNodePolicy for the given node.
-	GetPolicy(node GameTreeNode) OnlineNodePolicy
-
-	// Calculate the next strategy profile for all visited nodes.
-	Update()
-	// Get the current iteration (number of times update has been called).
-	Iter() int
-
-	// GetAverageStrategy returns the average strategy profile.
-	GetAverageStrategy() StrategyProfile
-
-	encoding.BinaryMarshaler
-	encoding.BinaryUnmarshaler
-	io.Closer
-}
-
-// NodePolicy maintains the action policy for a single Player node.
-type OnlineNodePolicy interface {
-	// AddRegret provides new observed instantaneous regrets
-	// to add to the total accumulated regret with the given weight.
-	AddExperienceTuple(w float32, action int, value, regret float32)
-	// GetStrategy gets the current vector of probabilities with which the ith
-	// available action should be played.
-	GetStrategy() []float32
 }

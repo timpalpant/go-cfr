@@ -96,7 +96,7 @@ func (c *GeneralizedSamplingCFR) handleTraversingPlayerNode(node GameTreeNode, s
 
 	cfValue := f32.DotUnitary(policy.GetStrategy(), regrets)
 	f32.AddConst(-cfValue, regrets)
-	policy.AddRegret(1.0/sampleProb, regrets)
+	policy.AddRegret(1.0/sampleProb, qs, regrets)
 
 	c.slicePool.free(qs)
 	c.slicePool.free(regrets)
@@ -118,7 +118,7 @@ func (c *GeneralizedSamplingCFR) handleSampledPlayerNode(node GameTreeNode, samp
 
 	// Sampling probabilities cancel out in the calculation of counterfactual value,
 	// so we don't include them here.
-	child := getOrSample(c.sampledActions, node, policy, c.rng)
+	child := node.GetChild(getOrSample(c.sampledActions, node, policy, c.rng))
 	return c.runHelper(child, node.Player(), sampleProb)
 }
 

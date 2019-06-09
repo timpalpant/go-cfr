@@ -12,9 +12,11 @@ type VRMCCFR struct {
 	decayAlpha      float32
 
 	slicePool *floatSlicePool
+	mapPool   *keyIntMapPool
 	rng       *rand.Rand
 
 	traversingPlayer int
+	sampledActions   map[string]int
 }
 
 func NewVRMCCFR(strategyProfile StrategyProfile, sampler Sampler, decayAlpha float32) *VRMCCFR {
@@ -23,6 +25,7 @@ func NewVRMCCFR(strategyProfile StrategyProfile, sampler Sampler, decayAlpha flo
 		sampler:         sampler,
 		decayAlpha:      decayAlpha,
 		slicePool:       &floatSlicePool{},
+		mapPool:         &keyIntMapPool{},
 		rng:             rand.New(rand.NewSource(rand.Int63())),
 	}
 }
@@ -30,6 +33,8 @@ func NewVRMCCFR(strategyProfile StrategyProfile, sampler Sampler, decayAlpha flo
 func (c *VRMCCFR) Run(node GameTreeNode) float32 {
 	iter := c.strategyProfile.Iter()
 	c.traversingPlayer = int(iter % 2)
+	c.sampledActions = c.mapPool.alloc()
+	defer c.mapPool.free(c.sampledActions)
 	return c.runHelper(node, node.Player(), 1.0)
 }
 
@@ -77,25 +82,28 @@ func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float
 	qs := c.slicePool.alloc(nChildren)
 	copy(qs, c.sampler.Sample(node, policy))
 	regrets := c.slicePool.alloc(nChildren)
+	oldSampledActions := c.sampledActions
+	c.sampledActions = c.mapPool.alloc()
 
 	for i, q := range qs {
 		child := node.GetChild(i)
 		u := baseline[i]
 		if q > 0 {
 			u += (c.runHelper(child, player, q*sampleProb) - baseline[i]) / q
-			c.updateBaseline(baseline, i, u)
+			policy.UpdateBaseline(c.decayAlpha, i, u)
 		}
 
 		regrets[i] = u
 	}
 
-	policy.SetBaseline(baseline)
 	cfValue := f32.DotUnitary(policy.GetStrategy(), regrets)
 	f32.AddConst(-cfValue, regrets)
-	policy.AddRegret(1.0/sampleProb, regrets)
+	policy.AddRegret(1.0/sampleProb, qs, regrets)
 
 	c.slicePool.free(qs)
 	c.slicePool.free(regrets)
+	c.mapPool.free(c.sampledActions)
+	c.sampledActions = oldSampledActions
 	return cfValue
 }
 
@@ -112,18 +120,9 @@ func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32)
 
 	// Sampling probabilities cancel out in the calculation of counterfactual value,
 	// so we don't include them here.
-	selected := sampleOne(policy.GetStrategy(), c.rng.Float32())
+	selected := getOrSample(c.sampledActions, node, policy, c.rng)
 	child := node.GetChild(selected)
 	result := c.runHelper(child, node.Player(), sampleProb)
-
-	baseline := policy.GetBaseline()
-	c.updateBaseline(baseline, selected, result)
-	policy.SetBaseline(baseline)
-
+	policy.UpdateBaseline(c.decayAlpha, selected, result)
 	return result
-}
-
-func (c *VRMCCFR) updateBaseline(baseline []float32, i int, value float32) {
-	baseline[i] *= (1 - c.decayAlpha)
-	baseline[i] += c.decayAlpha * value
 }

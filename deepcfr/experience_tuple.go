@@ -13,10 +13,9 @@ type ExperienceTuple struct {
 	InfoSet []byte
 	Action  uint16
 	Value   float32
-	Regret  float32
 }
 
-func NewExperienceTuple(node cfr.GameTreeNode, weight float32, action int, value, regret float32) *ExperienceTuple {
+func NewExperienceTuple(node cfr.GameTreeNode, weight float32, action int, value float32) *ExperienceTuple {
 	infoSet := node.InfoSet(node.Player())
 	isBuf, err := infoSet.MarshalBinary()
 	if err != nil {
@@ -28,14 +27,13 @@ func NewExperienceTuple(node cfr.GameTreeNode, weight float32, action int, value
 		InfoSet: isBuf,
 		Action:  uint16(action),
 		Value:   value,
-		Regret:  regret,
 	}
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler.
 func (t *ExperienceTuple) MarshalBinary() ([]byte, error) {
 	nInfoSetBytes := len(t.InfoSet) + 4
-	nBytes := nInfoSetBytes + 2 + 3*4
+	nBytes := nInfoSetBytes + 2 + 2*4
 	result := make([]byte, nBytes)
 
 	// Copy infoset bytes, prefixed by length.
@@ -52,8 +50,6 @@ func (t *ExperienceTuple) MarshalBinary() ([]byte, error) {
 	putF32(buf, t.Weight)
 	buf = buf[4:]
 	putF32(buf, t.Value)
-	buf = buf[4:]
-	putF32(buf, t.Regret)
 	buf = buf[4:]
 
 	return buf, nil
@@ -77,8 +73,6 @@ func (t *ExperienceTuple) UnmarshalBinary(buf []byte) error {
 	t.Weight = decodeF32(buf)
 	buf = buf[4:]
 	t.Value = decodeF32(buf)
-	buf = buf[4:]
-	t.Regret = decodeF32(buf)
 	buf = buf[4:]
 
 	return nil

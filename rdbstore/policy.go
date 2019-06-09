@@ -180,8 +180,8 @@ type ldbPolicy struct {
 }
 
 // AddRegret implements cfr.NodePolicy.
-func (l *ldbPolicy) AddRegret(w float32, instantaneousRegrets []float32) {
-	l.Policy.AddRegret(w, instantaneousRegrets)
+func (l *ldbPolicy) AddRegret(w float32, samplingQ, instantaneousRegrets []float32) {
+	l.Policy.AddRegret(w, samplingQ, instantaneousRegrets)
 	l.save()
 }
 
