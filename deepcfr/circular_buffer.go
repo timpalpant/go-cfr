@@ -27,7 +27,8 @@ func (b *CircularBuffer) AddSample(sample Sample) {
 	if len(b.samples) < b.maxSize {
 		b.samples = append(b.samples, sample)
 	} else {
-		b.samples[b.idx] = sample
+		idx := b.idx % len(b.samples)
+		b.samples[idx] = sample
 		b.idx++
 	}
 }
@@ -68,6 +69,10 @@ func (b *CircularBuffer) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
+	if err := enc.Encode(b.idx); err != nil {
+		return nil, err
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -80,6 +85,10 @@ func (b *CircularBuffer) UnmarshalBinary(buf []byte) error {
 	}
 
 	if err := dec.Decode(&b.samples); err != nil {
+		return err
+	}
+
+	if err := dec.Decode(&b.idx); err != nil {
 		return err
 	}
 
