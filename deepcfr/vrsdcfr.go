@@ -37,6 +37,10 @@ func NewVRSingleDeepCFR(model Model, buffers []Buffer, baselineBuffer Buffer) *V
 	}
 }
 
+func (d *VRSingleDeepCFR) GetBuffer(player int) Buffer {
+	return d.buffers[player]
+}
+
 func (d *VRSingleDeepCFR) currentPlayer() int {
 	return d.iter % 2
 }

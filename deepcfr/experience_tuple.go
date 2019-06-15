@@ -57,6 +57,10 @@ func (t *ExperienceTuple) MarshalBinary() ([]byte, error) {
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler.
 func (t *ExperienceTuple) UnmarshalBinary(buf []byte) error {
+	if len(buf) == 0 {
+		return nil
+	}
+
 	nInfoSetBytes := binary.LittleEndian.Uint32(buf)
 	buf = buf[4:]
 

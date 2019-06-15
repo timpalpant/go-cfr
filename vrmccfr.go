@@ -122,7 +122,5 @@ func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32)
 	// so we don't include them here.
 	selected := getOrSample(c.sampledActions, node, policy, c.rng)
 	child := node.GetChild(selected)
-	result := c.runHelper(child, node.Player(), sampleProb)
-	policy.UpdateBaseline(c.decayAlpha, selected, result)
-	return result
+	return c.runHelper(child, node.Player(), sampleProb)
 }
