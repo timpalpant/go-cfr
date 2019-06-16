@@ -15,23 +15,27 @@ import (
 // During CFR iterations, samples are added to the given buffer.
 // When Update is called, the model is retrained.
 type VRSingleDeepCFR struct {
-	model          Model
-	buffers        []Buffer
-	trainedModels  [][]TrainedModel
-	baselineBuffer Buffer
-	baselineModel  TrainedModel
-	iter           int
+	model           Model
+	buffers         []Buffer
+	trainedModels   [][]TrainedModel
+	baselineBuffers []Buffer
+	baselineModels  []TrainedModel
+	iter            int
 }
 
 // New returns a new VRSingleDeepCFR policy with the given model and sample buffer.
-func NewVRSingleDeepCFR(model Model, buffers []Buffer, baselineBuffer Buffer) *VRSingleDeepCFR {
+func NewVRSingleDeepCFR(model Model, buffers, baselineBuffers []Buffer) *VRSingleDeepCFR {
 	return &VRSingleDeepCFR{
-		model:          model,
-		buffers:        buffers,
-		baselineBuffer: baselineBuffer,
+		model:           model,
+		buffers:         buffers,
+		baselineBuffers: baselineBuffers,
 		trainedModels: [][]TrainedModel{
 			[]TrainedModel{},
 			[]TrainedModel{},
+		},
+		baselineModels: []TrainedModel{
+			nil,
+			nil,
 		},
 		iter: 1,
 	}
@@ -49,9 +53,9 @@ func (d *VRSingleDeepCFR) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	return &vrdcfrPolicy{
 		node:          node,
 		buf:           d.buffers[node.Player()],
-		baselineBuf:   d.baselineBuffer,
+		baselineBuf:   d.baselineBuffers[node.Player()],
 		models:        d.trainedModels[node.Player()],
-		baselineModel: d.baselineModel,
+		baselineModel: d.baselineModels[node.Player()],
 		iter:          d.iter,
 	}
 }
@@ -64,7 +68,8 @@ func (d *VRSingleDeepCFR) Update() {
 	model := &AdvantageModel{trained}
 	d.trainedModels[player] = append(d.trainedModels[player], model)
 
-	d.baselineModel = d.model.Train(d.baselineBuffer)
+	baselineBuf := d.baselineBuffers[player]
+	d.baselineModels[player] = d.model.Train(baselineBuf)
 
 	d.iter++
 }
@@ -81,7 +86,13 @@ func (d *VRSingleDeepCFR) Close() error {
 		}
 	}
 
-	return d.baselineBuffer.Close()
+	for _, buf := range d.baselineBuffers {
+		if err := buf.Close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler.
@@ -106,11 +117,11 @@ func (d *VRSingleDeepCFR) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
-	if err := enc.Encode(&d.baselineBuffer); err != nil {
+	if err := enc.Encode(d.baselineBuffers); err != nil {
 		return nil, err
 	}
 
-	if err := enc.Encode(&d.baselineModel); err != nil {
+	if err := enc.Encode(d.baselineModels); err != nil {
 		return nil, err
 	}
 
@@ -138,11 +149,11 @@ func (d *VRSingleDeepCFR) UnmarshalBinary(buf []byte) error {
 		return err
 	}
 
-	if err := dec.Decode(&d.baselineBuffer); err != nil {
+	if err := dec.Decode(&d.baselineBuffers); err != nil {
 		return err
 	}
 
-	if err := dec.Decode(&d.baselineModel); err != nil {
+	if err := dec.Decode(&d.baselineModels); err != nil {
 		return err
 	}
 
@@ -187,7 +198,7 @@ func (d *vrdcfrPolicy) AddRegret(weight float32, samplingQ, instantaneousRegrets
 	for i, r := range instantaneousRegrets {
 		// We only save regret samples that were actually traversed.
 		if samplingQ[i] > 0 {
-			sample := NewExperienceTuple(d.node, weight, i, r)
+			sample := NewExperienceTuple(d.node, weight/samplingQ[i], i, r)
 			d.buf.AddSample(sample)
 		}
 	}

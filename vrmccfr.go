@@ -9,7 +9,6 @@ import (
 type VRMCCFR struct {
 	strategyProfile StrategyProfile
 	sampler         Sampler
-	decayAlpha      float32
 
 	slicePool *floatSlicePool
 	mapPool   *keyIntMapPool
@@ -19,11 +18,10 @@ type VRMCCFR struct {
 	sampledActions   map[string]int
 }
 
-func NewVRMCCFR(strategyProfile StrategyProfile, sampler Sampler, decayAlpha float32) *VRMCCFR {
+func NewVRMCCFR(strategyProfile StrategyProfile, sampler Sampler) *VRMCCFR {
 	return &VRMCCFR{
 		strategyProfile: strategyProfile,
 		sampler:         sampler,
-		decayAlpha:      decayAlpha,
 		slicePool:       &floatSlicePool{},
 		mapPool:         &keyIntMapPool{},
 		rng:             rand.New(rand.NewSource(rand.Int63())),
@@ -35,46 +33,45 @@ func (c *VRMCCFR) Run(node GameTreeNode) float32 {
 	c.traversingPlayer = int(iter % 2)
 	c.sampledActions = c.mapPool.alloc()
 	defer c.mapPool.free(c.sampledActions)
-	return c.runHelper(node, node.Player(), 1.0)
+	return c.runHelper(node, node.Player(), 1.0, 1.0)
 }
 
-func (c *VRMCCFR) runHelper(node GameTreeNode, lastPlayer int, sampleProb float32) float32 {
+func (c *VRMCCFR) runHelper(node GameTreeNode, lastPlayer int, sampleProb, reachProb float32) float32 {
 	var ev float32
 	switch node.Type() {
 	case TerminalNodeType:
 		ev = float32(node.Utility(lastPlayer))
 	case ChanceNodeType:
-		ev = c.handleChanceNode(node, lastPlayer, sampleProb)
+		ev = c.handleChanceNode(node, lastPlayer, sampleProb, reachProb)
 	default:
 		sgn := getSign(lastPlayer, node.Player())
-		ev = sgn * c.handlePlayerNode(node, sampleProb)
+		ev = sgn * c.handlePlayerNode(node, sampleProb, reachProb)
 	}
 
 	node.Close()
 	return ev
 }
 
-func (c *VRMCCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb float32) float32 {
-	child, _ := node.SampleChild()
-	// Sampling probabilities cancel out in the calculation of counterfactual value.
-	return c.runHelper(child, lastPlayer, sampleProb)
+func (c *VRMCCFR) handleChanceNode(node GameTreeNode, lastPlayer int, sampleProb, reachProb float32) float32 {
+	child, p := node.SampleChild()
+	return c.runHelper(child, lastPlayer, float32(p)*sampleProb, float32(p)*reachProb)
 }
 
-func (c *VRMCCFR) handlePlayerNode(node GameTreeNode, sampleProb float32) float32 {
+func (c *VRMCCFR) handlePlayerNode(node GameTreeNode, sampleProb, reachProb float32) float32 {
 	if node.Player() == c.traversingPlayer {
-		return c.handleTraversingPlayerNode(node, sampleProb)
+		return c.handleTraversingPlayerNode(node, sampleProb, reachProb)
 	} else {
-		return c.handleSampledPlayerNode(node, sampleProb)
+		return c.handleSampledPlayerNode(node, sampleProb, reachProb)
 	}
 }
 
-func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float32) float32 {
+func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb, reachProb float32) float32 {
 	player := node.Player()
 	nChildren := node.NumChildren()
 	if nChildren == 1 {
 		// Optimization to skip trivial nodes with no real choice.
 		child := node.GetChild(0)
-		return c.runHelper(child, player, sampleProb)
+		return c.runHelper(child, player, sampleProb, reachProb)
 	}
 
 	policy := c.strategyProfile.GetPolicy(node)
@@ -87,18 +84,19 @@ func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float
 
 	for i, q := range qs {
 		child := node.GetChild(i)
-		u := baseline[i]
+		uHat := baseline[i]
 		if q > 0 {
-			u += (c.runHelper(child, player, q*sampleProb) - baseline[i]) / q
-			policy.UpdateBaseline(c.decayAlpha, i, u)
+			u := c.runHelper(child, player, q*sampleProb, reachProb)
+			uHat += (u - baseline[i]) / q
+			policy.UpdateBaseline(1.0/q, i, u)
 		}
 
-		regrets[i] = u
+		regrets[i] = uHat
 	}
 
 	cfValue := f32.DotUnitary(policy.GetStrategy(), regrets)
 	f32.AddConst(-cfValue, regrets)
-	policy.AddRegret(1.0/sampleProb, qs, regrets)
+	policy.AddRegret(reachProb/sampleProb, qs, regrets)
 
 	c.slicePool.free(qs)
 	c.slicePool.free(regrets)
@@ -109,8 +107,12 @@ func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb float
 
 // Sample player action according to strategy, do not update policy.
 // Save selected action so that they are reused if this infoset is hit again.
-func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32) float32 {
+func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb, reachProb float32) float32 {
 	policy := c.strategyProfile.GetPolicy(node)
+	player := node.Player()
+	nChildren := node.NumChildren()
+	baseline := policy.GetBaseline()
+	strategy := policy.GetStrategy()
 
 	// Update average strategy for this node.
 	// We perform "stochastic" updates as described in the MC-CFR paper.
@@ -118,9 +120,22 @@ func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32)
 		policy.AddStrategyWeight(1.0 / sampleProb)
 	}
 
-	// Sampling probabilities cancel out in the calculation of counterfactual value,
-	// so we don't include them here.
-	selected := getOrSample(c.sampledActions, node, policy, c.rng)
-	child := node.GetChild(selected)
-	return c.runHelper(child, node.Player(), sampleProb)
+	qs := c.slicePool.alloc(nChildren)
+	copy(qs, c.sampler.Sample(node, policy))
+	regrets := c.slicePool.alloc(nChildren)
+
+	for i, q := range qs {
+		p := strategy[i]
+		child := node.GetChild(i)
+		uHat := baseline[i]
+		if q > 0 {
+			u := c.runHelper(child, player, q*sampleProb, p*reachProb)
+			uHat += (u - baseline[i]) / q
+			policy.UpdateBaseline(1.0/q, i, u)
+		}
+
+		regrets[i] = uHat
+	}
+
+	return f32.DotUnitary(policy.GetStrategy(), regrets)
 }

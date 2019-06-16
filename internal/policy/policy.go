@@ -7,6 +7,9 @@ import (
 	"github.com/timpalpant/go-cfr/internal/f32"
 )
 
+// TODO: Make configurable for VR-MCCFR.
+const decayAlpha = 0.5
+
 // Policy implements cfr.NodePolicy by keeping a table of
 // accumulated regrets and strategies.
 type Policy struct {
@@ -93,8 +96,9 @@ func (p *Policy) GetBaseline() []float32 {
 }
 
 func (p *Policy) UpdateBaseline(w float32, action int, value float32) {
-	p.baseline[action] *= (1 - w)
-	p.baseline[action] += w * value
+	v := p.baseline[action] + w*(value-p.baseline[action])
+	p.baseline[action] *= (1 - decayAlpha)
+	p.baseline[action] += decayAlpha * v
 }
 
 func (p *Policy) NumActions() int {

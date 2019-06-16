@@ -7,7 +7,7 @@ import (
 	"github.com/timpalpant/go-cfr"
 )
 
-const eps = 1e-3
+const tol = 1e-3
 
 // Sample one child of the given Chance node, according to its probability distribution.
 func SampleChanceNode(node cfr.GameTreeNode) (cfr.GameTreeNode, float64) {
@@ -22,7 +22,7 @@ func SampleChanceNode(node cfr.GameTreeNode) (cfr.GameTreeNode, float64) {
 		}
 	}
 
-	if cumProb < 1.0-eps { // Leave room for floating point error.
+	if cumProb < 1.0-tol { // Leave room for floating point error.
 		panic(fmt.Errorf("probability distribution sums to %v != 1! node: %v, num children: %v",
 			cumProb, node, n))
 	}
@@ -40,7 +40,7 @@ func SampleOne(pv []float32, x float32) int {
 		}
 	}
 
-	if cumProb < 1.0-eps { // Leave room for floating point error.
+	if cumProb < 1.0-tol { // Leave room for floating point error.
 		panic(fmt.Errorf("probability distribution does not sum to 1! x=%v, pv=%v", x, pv))
 	}
 

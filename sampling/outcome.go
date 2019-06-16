@@ -37,8 +37,8 @@ func (os *OutcomeSampler) Sample(node cfr.GameTreeNode, policy cfr.NodePolicy) [
 		os.p[i] = 0 // memclr
 	}
 
-	q := eps * (1.0 / float32(nChildren)) // Sampled due to exploration.
-	q += (1.0 - eps) * p[selected]        // Sampled due to strategy.
+	q := os.eps * (1.0 / float32(nChildren)) // Sampled due to exploration.
+	q += (1.0 - os.eps) * p[selected]        // Sampled due to strategy.
 
 	os.p[selected] = q
 	return os.p

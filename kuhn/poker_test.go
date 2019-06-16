@@ -63,7 +63,7 @@ func TestPoker_OutcomeSamplingCFR(t *testing.T) {
 func TestPoker_VRMCCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	rs := sampling.NewRobustSampler(1)
-	opt := cfr.NewVRMCCFR(policy, rs, 0.5)
+	opt := cfr.NewVRMCCFR(policy, rs)
 	testCFR(t, opt, policy, 200000)
 }
 
