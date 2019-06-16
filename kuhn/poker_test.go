@@ -227,7 +227,7 @@ func (m randomGuessModel) Predict(infoSet cfr.InfoSet, nActions int) []float32 {
 	return result
 }
 
-func TestPoker_DeepCFR(t *testing.T) {
+func TestPoker_SingleDeepCFR(t *testing.T) {
 	model := &randomGuessModel{}
 	gob.Register(model)
 	buf0 := deepcfr.NewReservoirBuffer(10, 1)
@@ -264,6 +264,50 @@ func TestPoker_DeepCFR(t *testing.T) {
 
 	dec := gob.NewDecoder(&buf)
 	var reloaded deepcfr.SingleDeepCFR
+	if err := dec.Decode(&reloaded); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestPoker_VRSingleDeepCFR(t *testing.T) {
+	model := &randomGuessModel{}
+	gob.Register(model)
+	buf0 := deepcfr.NewReservoirBuffer(10, 1)
+	buf1 := deepcfr.NewReservoirBuffer(10, 1)
+	buf2 := deepcfr.NewReservoirBuffer(10, 1)
+	buf3 := deepcfr.NewReservoirBuffer(10, 1)
+	deepCFR := deepcfr.NewVRSingleDeepCFR(model, []deepcfr.Buffer{buf0, buf1}, []deepcfr.Buffer{buf2, buf3})
+	root := NewGame()
+	rs := sampling.NewRobustSampler(1)
+	opt := cfr.NewVRMCCFR(deepCFR, rs)
+	for i := 1; i <= 1000; i++ {
+		opt.Run(root)
+	}
+
+	deepCFR.Update()
+
+	for i := 1; i <= 1000; i++ {
+		opt.Run(root)
+	}
+
+	t.Logf("Buffer 0:")
+	for i, sample := range buf0.GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
+	}
+
+	t.Logf("Buffer 1:")
+	for i, sample := range buf1.GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
+	}
+
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(deepCFR); err != nil {
+		t.Error(err)
+	}
+
+	dec := gob.NewDecoder(&buf)
+	var reloaded deepcfr.VRSingleDeepCFR
 	if err := dec.Decode(&reloaded); err != nil {
 		t.Error(err)
 	}
