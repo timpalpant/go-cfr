@@ -267,6 +267,16 @@ func TestPoker_SingleDeepCFR(t *testing.T) {
 	if err := dec.Decode(&reloaded); err != nil {
 		t.Error(err)
 	}
+
+	t.Logf("Reloaded buffer 0 (%d samples):", reloaded.GetBuffer(0).Len())
+	for i, sample := range reloaded.GetBuffer(0).GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
+	}
+
+	t.Logf("Reloaded buffer 0 (%d samples):", reloaded.GetBuffer(1).Len())
+	for i, sample := range reloaded.GetBuffer(1).GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
+	}
 }
 
 func TestPoker_VRSingleDeepCFR(t *testing.T) {
@@ -310,6 +320,16 @@ func TestPoker_VRSingleDeepCFR(t *testing.T) {
 	var reloaded deepcfr.VRSingleDeepCFR
 	if err := dec.Decode(&reloaded); err != nil {
 		t.Error(err)
+	}
+
+	t.Logf("Reloaded buffer 0 (%d samples):", reloaded.GetBuffer(0).Len())
+	for i, sample := range reloaded.GetBuffer(0).GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
+	}
+
+	t.Logf("Reloaded buffer 0 (%d samples):", reloaded.GetBuffer(1).Len())
+	for i, sample := range reloaded.GetBuffer(1).GetSamples() {
+		t.Logf("Sample %d: %v", i, sample)
 	}
 }
 

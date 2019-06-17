@@ -39,6 +39,10 @@ func NewSingleDeepCFR(model Model, buffers []Buffer) *SingleDeepCFR {
 	}
 }
 
+func (d *SingleDeepCFR) GetBuffer(player int) Buffer {
+	return d.buffers[player]
+}
+
 func (d *SingleDeepCFR) currentPlayer() int {
 	return d.iter % 2
 }

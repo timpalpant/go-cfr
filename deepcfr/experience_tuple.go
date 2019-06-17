@@ -52,15 +52,11 @@ func (t *ExperienceTuple) MarshalBinary() ([]byte, error) {
 	putF32(buf, t.Value)
 	buf = buf[4:]
 
-	return buf, nil
+	return result, nil
 }
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler.
 func (t *ExperienceTuple) UnmarshalBinary(buf []byte) error {
-	if len(buf) == 0 {
-		return nil
-	}
-
 	nInfoSetBytes := binary.LittleEndian.Uint32(buf)
 	buf = buf[4:]
 
