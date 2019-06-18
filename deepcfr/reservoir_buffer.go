@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"sync"
+	"sync/atomic"
 )
 
 // ReservoirBuffer is a collection of samples held in memory.
@@ -19,7 +20,7 @@ type ReservoirBuffer struct {
 	maxSize     int
 	maxParallel int
 	samples     []Sample
-	n           int
+	n           int64
 	rngPool     randPool
 }
 
@@ -28,28 +29,24 @@ func NewReservoirBuffer(maxSize, maxParallel int) *ReservoirBuffer {
 	return &ReservoirBuffer{
 		maxSize:     maxSize,
 		maxParallel: maxParallel,
-		samples:     make([]Sample, 0, maxSize),
+		samples:     make([]Sample, maxSize),
 		rngPool:     newRandPool(2 * maxParallel),
 	}
 }
 
 // AddSample implements Buffer.
 func (b *ReservoirBuffer) AddSample(sample Sample) {
-	b.mx.Lock()
-	if b.n < b.maxSize {
-		b.samples = append(b.samples, sample)
-		b.n++
+	// We a are a little bit sloppy here for improved performance:
+	// Because we do not hold a lock for the duration of the call, it is possible
+	// for an earlier call to AddSample to collide and overwrite a later call
+	// if both are simultaneously assigned to the same random bucket.
+	n := int(atomic.AddInt64(&b.n, 1))
+
+	if n <= b.maxSize {
+		b.mx.Lock()
+		b.samples[n-1] = sample
 		b.mx.Unlock()
-		return
-	}
-
-	// Rand is slow and at steady-state most of the time we will discard the sample.
-	// So we unlock now and if we need to relock to store it; this is faster on average.
-	n := b.n
-	b.n++
-	b.mx.Unlock()
-
-	if m := b.rngPool.Intn(n); m < b.maxSize {
+	} else if m := b.rngPool.Intn(n); m < b.maxSize {
 		b.mx.Lock()
 		b.samples[m] = sample
 		b.mx.Unlock()
@@ -64,17 +61,19 @@ func (b *ReservoirBuffer) GetSample(idx int) Sample {
 }
 
 func (b *ReservoirBuffer) Len() int {
-	b.mx.Lock()
-	defer b.mx.Unlock()
-	return len(b.samples)
+	return int(atomic.LoadInt64(&b.n))
 }
 
 // GetSamples implements Buffer.
 func (b *ReservoirBuffer) GetSamples() []Sample {
+	n := int(atomic.LoadInt64(&b.n))
+	nSamples := min(n, b.maxSize)
+	result := make([]Sample, nSamples)
+
 	b.mx.Lock()
 	defer b.mx.Unlock()
-	result := make([]Sample, len(b.samples))
 	copy(result, b.samples)
+
 	return result
 }
 
