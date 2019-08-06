@@ -62,8 +62,9 @@ func TestPoker_OutcomeSamplingCFR(t *testing.T) {
 
 func TestPoker_VRMCCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
-	rs := sampling.NewRobustSampler(1)
-	opt := cfr.NewVRMCCFR(policy, rs)
+	rs1 := sampling.NewRobustSampler(2)
+	rs2 := sampling.NewRobustSampler(1)
+	opt := cfr.NewVRMCCFR(policy, rs1, rs2)
 	testCFR(t, opt, policy, 200000)
 }
 
@@ -288,8 +289,9 @@ func TestPoker_VRSingleDeepCFR(t *testing.T) {
 	buf3 := deepcfr.NewReservoirBuffer(10, 1)
 	deepCFR := deepcfr.NewVRSingleDeepCFR(model, []deepcfr.Buffer{buf0, buf1}, []deepcfr.Buffer{buf2, buf3})
 	root := NewGame()
-	rs := sampling.NewRobustSampler(1)
-	opt := cfr.NewVRMCCFR(deepCFR, rs)
+	rs1 := sampling.NewRobustSampler(2)
+	rs2 := sampling.NewRobustSampler(1)
+	opt := cfr.NewVRMCCFR(deepCFR, rs1, rs2)
 	for i := 1; i <= 1000; i++ {
 		opt.Run(root)
 	}

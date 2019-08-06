@@ -7,8 +7,9 @@ import (
 )
 
 type VRMCCFR struct {
-	strategyProfile StrategyProfile
-	sampler         Sampler
+	strategyProfile      StrategyProfile
+	traversingSampler    Sampler
+	notTraversingSampler Sampler
 
 	slicePool *floatSlicePool
 	mapPool   *keyIntMapPool
@@ -18,13 +19,14 @@ type VRMCCFR struct {
 	sampledActions   map[string]int
 }
 
-func NewVRMCCFR(strategyProfile StrategyProfile, sampler Sampler) *VRMCCFR {
+func NewVRMCCFR(strategyProfile StrategyProfile, traversingSampler, notTraversingSampler Sampler) *VRMCCFR {
 	return &VRMCCFR{
-		strategyProfile: strategyProfile,
-		sampler:         sampler,
-		slicePool:       &floatSlicePool{},
-		mapPool:         &keyIntMapPool{},
-		rng:             rand.New(rand.NewSource(rand.Int63())),
+		strategyProfile:      strategyProfile,
+		traversingSampler:    traversingSampler,
+		notTraversingSampler: notTraversingSampler,
+		slicePool:            &floatSlicePool{},
+		mapPool:              &keyIntMapPool{},
+		rng:                  rand.New(rand.NewSource(rand.Int63())),
 	}
 }
 
@@ -77,7 +79,7 @@ func (c *VRMCCFR) handleTraversingPlayerNode(node GameTreeNode, sampleProb, reac
 	policy := c.strategyProfile.GetPolicy(node)
 	baseline := policy.GetBaseline()
 	qs := c.slicePool.alloc(nChildren)
-	copy(qs, c.sampler.Sample(node, policy))
+	copy(qs, c.traversingSampler.Sample(node, policy))
 	regrets := c.slicePool.alloc(nChildren)
 	oldSampledActions := c.sampledActions
 	c.sampledActions = c.mapPool.alloc()
@@ -121,7 +123,7 @@ func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb, reachPr
 	}
 
 	qs := c.slicePool.alloc(nChildren)
-	copy(qs, c.sampler.Sample(node, policy))
+	copy(qs, c.notTraversingSampler.Sample(node, policy))
 	regrets := c.slicePool.alloc(nChildren)
 
 	for i, q := range qs {
@@ -137,5 +139,7 @@ func (c *VRMCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb, reachPr
 		regrets[i] = uHat
 	}
 
+	c.slicePool.free(qs)
+	c.slicePool.free(regrets)
 	return f32.DotUnitary(policy.GetStrategy(), regrets)
 }

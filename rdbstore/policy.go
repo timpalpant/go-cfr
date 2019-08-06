@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 
-	"github.com/golang/glog"
 	rocksdb "github.com/tecbot/gorocksdb"
 
 	"github.com/timpalpant/go-cfr"
@@ -24,8 +23,9 @@ type PolicyTable struct {
 	params    Params
 	discounts cfr.DiscountParams
 
-	db   *rocksdb.DB
-	iter int
+	db            *rocksdb.DB
+	iter          int
+	mayNeedUpdate map[string]struct{}
 }
 
 // New creates a new PolicyTable backed by a LevelDB database at the given path.
@@ -36,10 +36,11 @@ func New(params Params, discounts cfr.DiscountParams) (*PolicyTable, error) {
 	}
 
 	return &PolicyTable{
-		params:    params,
-		discounts: discounts,
-		db:        db,
-		iter:      1,
+		params:        params,
+		discounts:     discounts,
+		db:            db,
+		iter:          1,
+		mayNeedUpdate: make(map[string]struct{}),
 	}, nil
 }
 
@@ -108,48 +109,43 @@ func (pt *PolicyTable) Iter() int {
 // Update implements cfr.StrategyProfile.
 func (pt *PolicyTable) Update() {
 	discountPos, discountNeg, discountSum := pt.discounts.GetDiscountFactors(pt.iter)
-	it := pt.db.NewIterator(pt.params.ReadOptions)
-	defer it.Close()
 
-	n := 0
-	// TODO(palpant): Figure out a way to keep track of which policies need updating.
-	for it.SeekToFirst(); it.Valid(); it.Next() {
-		key := it.Key()
-		value := it.Value()
-		n++
+	for key := range pt.mayNeedUpdate {
+		p := pt.getPolicyByKey(key)
+		p.NextStrategy(discountPos, discountNeg, discountSum)
 
-		var policy policy.Policy
-		if err := policy.UnmarshalBinary(value.Data()); err != nil {
-			panic(err)
+		lPolicy := &ldbPolicy{
+			Policy: p,
+			db:     pt.db,
+			key:    []byte(key),
+			wOpts:  pt.params.WriteOptions,
 		}
 
-		policy.NextStrategy(discountPos, discountNeg, discountSum)
-		buf, err := policy.MarshalBinary()
-		if err != nil {
-			panic(err)
-		}
-
-		if err := pt.db.Put(pt.params.WriteOptions, key.Data(), buf); err != nil {
-			panic(err)
-		}
-
-		key.Free()
-		value.Free()
+		lPolicy.save()
+		delete(pt.mayNeedUpdate, key)
 	}
 
-	if err := it.Err(); err != nil {
-		panic(err)
-	}
-
-	glog.V(1).Infof("Updated %d strategies", n)
 	pt.iter++
 }
 
 // GetPolicy implements cfr.StrategyProfile.
 func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	key := node.InfoSet(node.Player()).Key()
-	policy := policy.New(node.NumChildren())
+	p := pt.getPolicyByKey(key)
+	if p == nil {
+		p = policy.New(node.NumChildren())
+	}
 
+	pt.mayNeedUpdate[key] = struct{}{}
+	return &ldbPolicy{
+		Policy: p,
+		db:     pt.db,
+		key:    []byte(key),
+		wOpts:  pt.params.WriteOptions,
+	}
+}
+
+func (pt *PolicyTable) getPolicyByKey(key string) *policy.Policy {
 	result, err := pt.db.Get(pt.params.ReadOptions, []byte(key))
 	if err != nil {
 		panic(err)
@@ -157,17 +153,15 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	defer result.Free()
 
 	if len(result.Data()) > 0 {
+		policy := &policy.Policy{}
 		if err := policy.UnmarshalBinary(result.Data()); err != nil {
 			panic(err)
 		}
+
+		return policy
 	}
 
-	return &ldbPolicy{
-		Policy: policy,
-		db:     pt.db,
-		key:    []byte(key),
-		wOpts:  pt.params.WriteOptions,
-	}
+	return nil
 }
 
 // ldbPolicy implements cfr.NodePolicy, with all updates immediately persisted

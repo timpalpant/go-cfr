@@ -3,9 +3,14 @@ package cfr
 import (
 	"bytes"
 	"encoding/gob"
+	"expvar"
 	"fmt"
 
 	"github.com/timpalpant/go-cfr/internal/policy"
+)
+
+var (
+	numInfosets = expvar.NewInt("num_infosets")
 )
 
 func init() {
@@ -65,6 +70,7 @@ func (pt *PolicyTable) GetPolicy(node GameTreeNode) NodePolicy {
 	if !ok {
 		np = policy.New(node.NumChildren())
 		pt.policiesByKey[key] = np
+		numInfosets.Set(int64(len(pt.policiesByKey)))
 	} else if np.NumActions() != node.NumChildren() {
 		panic(fmt.Errorf("strategy has n_actions=%v but node has n_children=%v: %v",
 			np.NumActions(), node.NumChildren(), node))
