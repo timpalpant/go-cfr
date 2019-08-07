@@ -56,7 +56,14 @@ func TestPoker_ExternalSamplingCFR(t *testing.T) {
 func TestPoker_OutcomeSamplingCFR(t *testing.T) {
 	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
 	os := sampling.NewOutcomeSampler(0.3)
-	opt := cfr.NewGeneralizedSampling(policy, os)
+	opt := cfr.NewMCCFR(policy, os)
+	testCFR(t, opt, policy, 200000)
+}
+
+func TestPoker_OnlineOutcomeSamplingCFR(t *testing.T) {
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
+	os := sampling.NewOutcomeSampler(0.3)
+	opt := cfr.NewOnlineOutcomeSamplingCFR(policy, os)
 	testCFR(t, opt, policy, 200000)
 }
 

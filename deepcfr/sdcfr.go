@@ -165,6 +165,10 @@ func (d *dcfrPolicy) AddRegret(weight float32, samplingQ, instantaneousRegrets [
 	d.buf.AddSample(sample)
 }
 
+func (d *dcfrPolicy) IsEmpty() bool {
+	return d.currentModel() == nil
+}
+
 func (d *dcfrPolicy) GetStrategy() []float32 {
 	if d.strategy == nil {
 		model := d.currentModel()

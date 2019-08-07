@@ -193,6 +193,10 @@ func (d *vrdcfrPolicy) getInfoSet() cfr.InfoSet {
 	return d.infoSet
 }
 
+func (d *vrdcfrPolicy) IsEmpty() bool {
+	return d.currentModel() == nil
+}
+
 func (d *vrdcfrPolicy) AddRegret(weight float32, samplingQ, instantaneousRegrets []float32) {
 	weight *= float32((d.iter + 1) / 2) // Linear CFR.
 	for i, r := range instantaneousRegrets {

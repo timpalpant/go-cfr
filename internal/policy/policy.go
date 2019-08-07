@@ -37,6 +37,17 @@ func (p *Policy) GetStrategy() []float32 {
 	return p.currentStrategy
 }
 
+func (p *Policy) IsEmpty() bool {
+	// TODO(palpant): Worth keeping a separate bit?
+	for _, r := range p.regretSum {
+		if r != 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
 func (p *Policy) NextStrategy(discountPositiveRegret, discountNegativeRegret, discountstrategySum float32) {
 	if discountstrategySum != 1.0 {
 		f32.ScalUnitary(discountstrategySum, p.strategySum)

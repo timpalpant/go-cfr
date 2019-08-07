@@ -113,4 +113,7 @@ type NodePolicy interface {
 	AddStrategyWeight(w float32)
 	// GetAverageStrategy returns the average strategy over all iterations.
 	GetAverageStrategy() []float32
+
+	// IsEmpty returns true if the NodePolicy is new and has no accumulated regret.
+	IsEmpty() bool
 }
