@@ -2,6 +2,13 @@ language: go
 go:
 - 1.12
 install:
+- apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev
+- git clone https://github.com/facebook/rocksdb.git
+- cd rocksdb
+- make static_lib
+- make shared_lib
+- cd ..
+- CGO_CFLAGS="-I${TRAVIS_BUILD_DIR}/rocksdb/include" CGO_LDFLAGS="-L${TRAVIS_BUILD_DIR}/rocksdb -lrocksdb -lstdc++ -lm -lz -lbz2 -lsnappy -llz4 -lzstd" go get github.com/tecbot/gorocksdb
 - go get golang.org/x/tools/cmd/cover
 - go get github.com/mattn/goveralls
 - go get github.com/modocache/gover
