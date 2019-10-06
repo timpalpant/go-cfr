@@ -5,6 +5,9 @@ go-cfr is a package that implements several forms of [Counterfactual Regret Mini
 CFR can be used to solve for an approximate [Nash Equilibrium](https://en.wikipedia.org/wiki/Nash_equilibrium)
 in an imperfect information [extensive-form game](https://en.wikipedia.org/wiki/Extensive-form_game).
 
+This project is a research library used to study different forms of CFR. For a similar alternative in C++/Python/Swift, see [OpenSpiel](https://github.com/deepmind/open_spiel).
+
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
 [![GoDoc](https://godoc.org/github.com/timpalpant/go-cfr?status.svg)](http://godoc.org/github.com/timpalpant/go-cfr)
 [![Build Status](https://travis-ci.org/timpalpant/go-cfr.svg?branch=master)](https://travis-ci.org/timpalpant/go-cfr)
 [![Coverage Status](https://coveralls.io/repos/timpalpant/go-cfr/badge.svg?branch=master&service=github)](https://coveralls.io/github/timpalpant/go-cfr?branch=master)
@@ -63,10 +66,6 @@ func main() {
     - Generalized Sampling CFR: https://dl.acm.org/citation.cfm?id=2900920
 - Deep CFR: https://arxiv.org/abs/1811.00164
 - Single Deep CFR: https://arxiv.org/abs/1901.07621
-
-## Contributing
-
-Pull requests and issues are welcomed!
 
 ## License
 
