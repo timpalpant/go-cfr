@@ -2,7 +2,7 @@ language: go
 go:
 - 1.12
 install:
-- apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev
+- sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev liblz4-dev libzstd-dev
 - git clone https://github.com/facebook/rocksdb.git
 - cd rocksdb
 - make static_lib
