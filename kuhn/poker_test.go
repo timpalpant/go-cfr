@@ -8,6 +8,7 @@ import (
 
 	"github.com/timpalpant/go-cfr"
 	"github.com/timpalpant/go-cfr/deepcfr"
+	"github.com/timpalpant/go-cfr/mcts"
 	"github.com/timpalpant/go-cfr/sampling"
 	"github.com/timpalpant/go-cfr/tree"
 )
@@ -386,5 +387,30 @@ func TestMarshalStrategy(t *testing.T) {
 		if !reflect.DeepEqual(avgStrat1, avgStrat2) {
 			t.Errorf("expected %v, got %v", avgStrat1, avgStrat2)
 		}
+	})
+}
+
+func TestPoker_SmoothUCT(t *testing.T) {
+	root := NewGame()
+	opt := mcts.NewSmoothUCT(100000, 1.75, 0.1, 0.9, 0.001)
+	ev := opt.Run(root)
+	t.Logf("EV = %.4f", ev)
+	seen := make(map[string]struct{})
+	tree.Visit(root, func(node cfr.GameTreeNode) {
+		if node.Type() != cfr.PlayerNodeType {
+			return
+		}
+
+		key := node.InfoSet(node.Player()).Key()
+		if _, ok := seen[key]; ok {
+			return
+		}
+
+		actionProbs := opt.GetPolicy(node)
+		if actionProbs != nil {
+			t.Logf("%6s: check=%.2f bet=%.2f", node, actionProbs[0], actionProbs[1])
+		}
+
+		seen[key] = struct{}{}
 	})
 }

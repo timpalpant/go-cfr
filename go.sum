@@ -2,6 +2,8 @@ github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b h1:VKtxabqXZkF25pY9ekf
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/pkg/errors v0.8.1 h1:iURUrRGxPUNPdy5/HRSm+Yj6okJ6UtLINN0Q9M4+h3I=
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c h1:g+WoO5jjkqGAzHWCjJB1zZfXPIAaDpzXIEJ0eS6B5Ok=
+github.com/tecbot/gorocksdb v0.0.0-20191217155057-f0fad39f321c/go.mod h1:ahpPrc7HpcfEWDQRZEmnXMzHY03mLDYMCxeDzy46i+8=
 github.com/timpalpant/alphacats v0.0.0-20190221005847-4552acb4693b h1:9r6KzJBmdT+SKHR4kxvuzlcYAiuRLiEJ0izQtc0Avz0=
 github.com/timpalpant/alphacats v0.0.0-20190221005847-4552acb4693b/go.mod h1:kyucde2Wmjnqy45FuXS1dejjyw/KS9PFOq+TcwvSiSg=
 github.com/timpalpant/go-cfr v0.0.0-20190217204612-695ebec2de7b/go.mod h1:AsX3ubAP6ZMcpNEQXKnqrgv7Urhb9TnCWhLLTg2BLUI=
