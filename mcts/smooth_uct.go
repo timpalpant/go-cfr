@@ -109,8 +109,20 @@ func stackalloc(n int) []float32 {
 	return make([]float32, n)
 }
 
+type Evaluator interface {
+	Evaluate(node cfr.GameTreeNode) []float32
+}
+
+type RandomRolloutEvaluator struct{}
+
+func (rr RandomRolloutEvaluator) Evaluate(node cfr.GameTreeNode) []float32 {
+	return uniformDistribution(node.NumChildren())
+}
+
 // Implements Smooth UCT.
 type SmoothUCT struct {
+	evaluator Evaluator
+
 	c     float32
 	gamma float32
 	eta   float32
@@ -120,8 +132,10 @@ type SmoothUCT struct {
 	tree map[string]*mctsNode
 }
 
-func NewSmoothUCT(c, gamma, eta, d float32) *SmoothUCT {
+func NewSmoothUCT(evaluator Evaluator, c, gamma, eta, d float32) *SmoothUCT {
 	return &SmoothUCT{
+		evaluator: evaluator,
+
 		c:     c,
 		gamma: gamma,
 		eta:   eta,
@@ -144,10 +158,10 @@ func (s *SmoothUCT) GetPolicy(node cfr.GameTreeNode, temperature float32) []floa
 		return treeNode.averageStrategy(temperature)
 	}
 
-	return uniform(node.NumChildren())
+	return uniformDistribution(node.NumChildren())
 }
 
-func uniform(n int) []float32 {
+func uniformDistribution(n int) []float32 {
 	result := make([]float32, n)
 	for i := range result {
 		result[i] = 1.0 / float32(n)
@@ -183,7 +197,10 @@ func getSign(player1, player2 int) float32 {
 func (s *SmoothUCT) handlePlayerNode(node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
 	i := node.Player()
 	if isOutOfTree[i] {
-		return s.rollout(node, isOutOfTree)
+		p := s.evaluator.Evaluate(node)
+		selected := sampling.SampleOne(p, rand.Float32())
+		child := node.GetChild(selected)
+		return s.simulate(child, i, isOutOfTree)
 	}
 
 	u := node.InfoSet(i).Key()
@@ -202,10 +219,4 @@ func (s *SmoothUCT) handlePlayerNode(node cfr.GameTreeNode, isOutOfTree [2]bool)
 	reward := s.simulate(child, i, isOutOfTree)
 	treeNode.update(action, reward)
 	return reward
-}
-
-func (s *SmoothUCT) rollout(node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
-	action := rand.Intn(node.NumChildren())
-	child := node.GetChild(action)
-	return s.simulate(child, node.Player(), isOutOfTree)
 }
