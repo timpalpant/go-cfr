@@ -51,8 +51,6 @@ func (s *mctsNode) selectAction(c, gamma, eta, d float32) int {
 	if z < etaK {
 		var selected int
 		vMax := -float32(math.MaxFloat32)
-		qs := make([]float32, len(s.visits))
-		vs := make([]float32, len(s.visits))
 		for i, n := range s.visits {
 			q := s.totalRewards[i] / float32(n)
 			v := q + c*float32(math.Sqrt(math.Log(float64(totalVisits))/float64(n)))
@@ -63,9 +61,6 @@ func (s *mctsNode) selectAction(c, gamma, eta, d float32) int {
 				// Break ties uniformly at random.
 				selected = i
 			}
-
-			qs[i] = q
-			vs[i] = v
 		}
 
 		return selected
