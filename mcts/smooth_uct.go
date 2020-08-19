@@ -11,14 +11,16 @@ import (
 
 type mctsNode struct {
 	mx           sync.Mutex
+	prior        []float32
 	visits       []int
 	totalRewards []float32
 }
 
-func newMCTSNode(n int) *mctsNode {
+func newMCTSNode(prior []float32) *mctsNode {
 	return &mctsNode{
-		visits:       make([]int, n),
-		totalRewards: make([]float32, n),
+		prior:        prior,
+		visits:       make([]int, len(prior)),
+		totalRewards: make([]float32, len(prior)),
 	}
 }
 
@@ -29,8 +31,39 @@ func (s *mctsNode) update(action int, reward float32) {
 	s.totalRewards[action] += reward
 }
 
+// NOTE: This uses the selection formula from the AlphaGo Zero paper.
+// The main difference seems to be the weighting of the visit counts.
+func (s *mctsNode) selectActionPUCT(c float32) int {
+	s.mx.Lock()
+	defer s.mx.Unlock()
+	totalVisits := 0
+	for _, v := range s.visits {
+		totalVisits += v
+	}
+
+	var selected int
+	vMax := -float32(math.MaxFloat32)
+	for i, n := range s.visits {
+		p := s.prior[i]
+		var q float32
+		if n > 0 {
+			q = s.totalRewards[i] / float32(n)
+		}
+		v := q + c*p*float32(math.Sqrt(float64(totalVisits)))/float32(1+n)
+		if v > vMax {
+			selected = i
+			vMax = v
+		} else if v == vMax && rand.Intn(2) == 0 {
+			// Break ties uniformly at random.
+			selected = i
+		}
+	}
+
+	return selected
+}
+
 // Follows the notation of Heinrich and Silver (2015).
-func (s *mctsNode) selectAction(c, gamma, eta, d float32) int {
+func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) int {
 	s.mx.Lock()
 	defer s.mx.Unlock()
 	totalVisits := 0
@@ -109,20 +142,8 @@ func stackalloc(n int) []float32 {
 	return make([]float32, n)
 }
 
-type Evaluator interface {
-	Evaluate(node cfr.GameTreeNode) []float32
-}
-
-type RandomRolloutEvaluator struct{}
-
-func (rr RandomRolloutEvaluator) Evaluate(node cfr.GameTreeNode) []float32 {
-	return uniformDistribution(node.NumChildren())
-}
-
 // Implements Smooth UCT.
 type SmoothUCT struct {
-	evaluator Evaluator
-
 	c     float32
 	gamma float32
 	eta   float32
@@ -132,10 +153,8 @@ type SmoothUCT struct {
 	tree map[string]*mctsNode
 }
 
-func NewSmoothUCT(evaluator Evaluator, c, gamma, eta, d float32) *SmoothUCT {
+func NewSmoothUCT(c, gamma, eta, d float32) *SmoothUCT {
 	return &SmoothUCT{
-		evaluator: evaluator,
-
 		c:     c,
 		gamma: gamma,
 		eta:   eta,
@@ -197,26 +216,29 @@ func getSign(player1, player2 int) float32 {
 func (s *SmoothUCT) handlePlayerNode(node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
 	i := node.Player()
 	if isOutOfTree[i] {
-		p := s.evaluator.Evaluate(node)
-		selected := sampling.SampleOne(p, rand.Float32())
-		child := node.GetChild(selected)
-		return s.simulate(child, i, isOutOfTree)
+		return s.rollout(node, isOutOfTree)
 	}
 
 	u := node.InfoSet(i).Key()
 	s.mx.Lock()
 	treeNode, ok := s.tree[u]
 	if !ok { // Expand tree.
-		numChildren := node.NumChildren()
-		treeNode = newMCTSNode(numChildren)
+		prior := uniformDistribution(node.NumChildren())
+		treeNode = newMCTSNode(prior)
 		s.tree[u] = treeNode
 		isOutOfTree[i] = true
 	}
 	s.mx.Unlock()
 
-	action := treeNode.selectAction(s.c, s.gamma, s.eta, s.d)
+	action := treeNode.selectActionSmooth(s.c, s.gamma, s.eta, s.d)
 	child := node.GetChild(action)
 	reward := s.simulate(child, i, isOutOfTree)
 	treeNode.update(action, reward)
 	return reward
+}
+
+func (s *SmoothUCT) rollout(node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
+	action := rand.Intn(node.NumChildren())
+	child := node.GetChild(action)
+	return s.simulate(child, node.Player(), isOutOfTree)
 }
