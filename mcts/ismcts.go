@@ -88,8 +88,13 @@ func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode) float32 {
 	s.mx.Lock()
 	treeNode, ok := s.tree[u]
 	if !ok { // Expand tree.
+		// Unlock so that other evaluations can be batched together.
+		// If we race here and try to expand the same node twice, it's ok
+		// since the prior and values will be the same.
+		s.mx.Unlock()
 		p, v := s.evaluator.Evaluate(node)
 		treeNode = newMCTSNode(p)
+		s.mx.Lock()
 		s.tree[u] = treeNode
 		s.mx.Unlock()
 		return v
