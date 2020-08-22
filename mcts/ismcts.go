@@ -17,6 +17,30 @@ type Evaluator interface {
 	Evaluate(node cfr.GameTreeNode) (policy []float32, value float32)
 }
 
+type RandomRollout struct {
+	nRollouts int
+}
+
+func NewRandomRollout(nRollouts int) *RandomRollout {
+	return &RandomRollout{nRollouts}
+}
+
+func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode) (policy []float32, value float32) {
+	var ev float64
+	for i := 0; i < rr.nRollouts; i++ {
+		current := node
+		for current.Type() != cfr.TerminalNodeType {
+			action := rand.Intn(current.NumChildren())
+			current = current.GetChild(action)
+		}
+
+		ev += current.Utility(node.Player()) / float64(rr.nRollouts)
+	}
+
+	policy = uniformDistribution(node.NumChildren())
+	return policy, float32(ev)
+}
+
 // Implements one-sided IS-MCTS. The opponent will always use the provided policy
 // to select actions.
 type OneSidedISMCTS struct {
