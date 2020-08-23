@@ -14,7 +14,7 @@ type Policy interface {
 }
 
 type Evaluator interface {
-	Evaluate(node cfr.GameTreeNode) (policy []float32, value float32)
+	Evaluate(node cfr.GameTreeNode, opponent Policy) (policy []float32, value float32)
 }
 
 type RandomRollout struct {
@@ -25,19 +25,32 @@ func NewRandomRollout(nRollouts int) *RandomRollout {
 	return &RandomRollout{nRollouts}
 }
 
-func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode) (policy []float32, value float32) {
+func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode, opponent Policy) (policy []float32, value float32) {
+	player := node.Player()
 	var ev float64
 	for i := 0; i < rr.nRollouts; i++ {
 		current := node
 		for current.Type() != cfr.TerminalNodeType {
-			action := rand.Intn(current.NumChildren())
-			current = current.GetChild(action)
+			if current.Player() == player {
+				action := rand.Intn(current.NumChildren())
+				current = current.GetChild(action)
+			} else {
+				p := opponent.GetPolicy(current)
+				if len(p) != current.NumChildren() {
+					panic(fmt.Errorf("policy returned wrong number of actions: expected %d, got %d",
+						current.NumChildren(), len(p)))
+				}
+
+				action := sampling.SampleOne(p, rand.Float32())
+				current = current.GetChild(action)
+			}
 		}
 
 		ev += current.Utility(node.Player()) / float64(rr.nRollouts)
 	}
 
 	policy = uniformDistribution(node.NumChildren())
+	node.Close()
 	return policy, float32(ev)
 }
 
@@ -49,25 +62,22 @@ type OneSidedISMCTS struct {
 	evaluator Evaluator
 	c         float32
 
-	mx            sync.Mutex
-	tree          map[string]*mctsNode
-	opponentCache map[string][]float32
+	mx   sync.Mutex
+	tree map[string]*mctsNode
 }
 
-func NewOneSidedISMCTS(player int, opponent Policy, evaluator Evaluator, c float32) *OneSidedISMCTS {
+func NewOneSidedISMCTS(player int, evaluator Evaluator, c float32) *OneSidedISMCTS {
 	return &OneSidedISMCTS{
 		player:    player,
-		opponent:  opponent,
 		evaluator: evaluator,
 		c:         c,
 
-		tree:          make(map[string]*mctsNode),
-		opponentCache: make(map[string][]float32),
+		tree: make(map[string]*mctsNode),
 	}
 }
 
-func (s *OneSidedISMCTS) Run(node cfr.GameTreeNode) float32 {
-	return s.simulate(node, node.Player())
+func (s *OneSidedISMCTS) Run(node cfr.GameTreeNode, opponent Policy) float32 {
+	return s.simulate(node, opponent, node.Player())
 }
 
 func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode, temperature float32) []float32 {
@@ -87,27 +97,27 @@ func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode, temperature float32) [
 	return uniformDistribution(node.NumChildren())
 }
 
-func (s *OneSidedISMCTS) simulate(node cfr.GameTreeNode, lastPlayer int) float32 {
+func (s *OneSidedISMCTS) simulate(node cfr.GameTreeNode, opponent Policy, lastPlayer int) float32 {
 	var ev float32
 	switch node.Type() {
 	case cfr.TerminalNodeType:
 		ev = float32(node.Utility(lastPlayer))
 	case cfr.ChanceNodeType:
 		child, _ := node.SampleChild()
-		ev = s.simulate(child, lastPlayer)
+		ev = s.simulate(child, opponent, lastPlayer)
 	default:
 		sgn := getSign(lastPlayer, node.Player())
-		ev = sgn * s.handlePlayerNode(node)
+		ev = sgn * s.handlePlayerNode(node, opponent)
 	}
 
 	node.Close()
 	return ev
 }
 
-func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode) float32 {
+func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode, opponent Policy) float32 {
 	i := node.Player()
 	if i != s.player {
-		return s.handleOpponentNode(node)
+		return s.handleOpponentNode(node, opponent)
 	}
 
 	u := node.InfoSet(i).Key()
@@ -118,7 +128,7 @@ func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode) float32 {
 		// If we race here and try to expand the same node twice, it's ok
 		// since the prior and values will be the same.
 		s.mx.Unlock()
-		p, v := s.evaluator.Evaluate(node)
+		p, v := s.evaluator.Evaluate(node, opponent)
 		treeNode = newMCTSNode(p)
 		s.mx.Lock()
 		s.tree[u] = treeNode
@@ -129,24 +139,14 @@ func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode) float32 {
 
 	action := treeNode.selectActionPUCT(s.c)
 	child := node.GetChild(action)
-	reward := s.simulate(child, i)
+	reward := s.simulate(child, opponent, i)
 	treeNode.update(action, reward)
 	return reward
 }
 
-func (s *OneSidedISMCTS) handleOpponentNode(node cfr.GameTreeNode) float32 {
-	u := node.InfoSet(node.Player()).Key()
-	s.mx.Lock()
-	p, ok := s.opponentCache[u]
-	if !ok {
-		s.mx.Unlock()
-		p = s.opponent.GetPolicy(node)
-		s.mx.Lock()
-		s.opponentCache[u] = p
-	}
-	s.mx.Unlock()
-
+func (s *OneSidedISMCTS) handleOpponentNode(node cfr.GameTreeNode, opponent Policy) float32 {
+	p := opponent.GetPolicy(node)
 	selected := sampling.SampleOne(p, rand.Float32())
 	child := node.GetChild(selected)
-	return s.simulate(child, node.Player())
+	return s.simulate(child, opponent, node.Player())
 }
