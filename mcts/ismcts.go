@@ -49,8 +49,9 @@ type OneSidedISMCTS struct {
 	evaluator Evaluator
 	c         float32
 
-	mx   sync.Mutex
-	tree map[string]*mctsNode
+	mx            sync.Mutex
+	tree          map[string]*mctsNode
+	opponentCache map[string][]float32
 }
 
 func NewOneSidedISMCTS(player int, opponent Policy, evaluator Evaluator, c float32) *OneSidedISMCTS {
@@ -60,7 +61,8 @@ func NewOneSidedISMCTS(player int, opponent Policy, evaluator Evaluator, c float
 		evaluator: evaluator,
 		c:         c,
 
-		tree: make(map[string]*mctsNode),
+		tree:          make(map[string]*mctsNode),
+		opponentCache: make(map[string][]float32),
 	}
 }
 
@@ -133,7 +135,17 @@ func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode) float32 {
 }
 
 func (s *OneSidedISMCTS) handleOpponentNode(node cfr.GameTreeNode) float32 {
-	p := s.opponent.GetPolicy(node)
+	u := node.InfoSet(node.Player()).Key()
+	s.mx.Lock()
+	p, ok := s.opponentCache[u]
+	if !ok {
+		s.mx.Unlock()
+		p = s.opponent.GetPolicy(node)
+		s.mx.Lock()
+		s.opponentCache[u] = p
+	}
+	s.mx.Unlock()
+
 	selected := sampling.SampleOne(p, rand.Float32())
 	child := node.GetChild(selected)
 	return s.simulate(child, node.Player())
