@@ -31,7 +31,9 @@ func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode, opponent Policy) (polic
 	for i := 0; i < rr.nRollouts; i++ {
 		current := node
 		for current.Type() != cfr.TerminalNodeType {
-			if current.Player() == player {
+			if current.Type() == cfr.ChanceNodeType {
+				current, _ = current.SampleChild()
+			} else if current.Player() == player {
 				action := rand.Intn(current.NumChildren())
 				current = current.GetChild(action)
 			} else {
