@@ -9,6 +9,7 @@ import (
 	"github.com/timpalpant/go-cfr/sampling"
 )
 
+// TODO(palpant): Make configurable; this assumes game outcomes are [-1, 1].
 const virtualLoss = 1
 
 type mctsNode struct {
@@ -29,21 +30,21 @@ func newMCTSNode(prior []float32) *mctsNode {
 func (s *mctsNode) update(action int, reward float32) {
 	s.mx.Lock()
 	defer s.mx.Unlock()
-	s.visits[action] = s.visits[action] - virtualLoss + 1
-	s.totalRewards[action] += virtualLoss - reward
+	s.visits[action] += 1 - virtualLoss
+	s.totalRewards[action] += virtualLoss + reward
 }
 
 // NOTE: This uses the selection formula from the AlphaGo Zero paper.
 // The main difference seems to be the weighting of the visit counts.
-func (s *mctsNode) selectActionPUCT(c float32) int {
+func (s *mctsNode) selectActionPUCT(c float32) (action int) {
 	s.mx.Lock()
 	defer s.mx.Unlock()
+	defer func() { s.addVirtualLossUnsafe(action) }()
 	totalVisits := 0
 	for _, v := range s.visits {
 		totalVisits += v
 	}
 
-	var selected int
 	vMax := -float32(math.MaxFloat32)
 	for i, n := range s.visits {
 		p := s.prior[i]
@@ -53,23 +54,22 @@ func (s *mctsNode) selectActionPUCT(c float32) int {
 		}
 		v := q + c*p*float32(math.Sqrt(float64(totalVisits)))/float32(1+n)
 		if v > vMax {
-			selected = i
+			action = i
 			vMax = v
 		} else if v == vMax && rand.Intn(2) == 0 {
 			// Break ties uniformly at random.
-			selected = i
+			action = i
 		}
 	}
 
-	s.visits[selected] = s.visits[selected] + virtualLoss
-	s.totalRewards[selected] -= virtualLoss
-	return selected
+	return
 }
 
 // Follows the notation of Heinrich and Silver (2015).
-func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) int {
+func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) (action int) {
 	s.mx.Lock()
 	defer s.mx.Unlock()
+	defer func() { s.addVirtualLossUnsafe(action) }()
 	totalVisits := 0
 	for i, v := range s.visits {
 		if v == 0 {
@@ -86,29 +86,30 @@ func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) int {
 
 	z := rand.Float32()
 	if z < etaK {
-		var selected int
 		vMax := -float32(math.MaxFloat32)
 		for i, n := range s.visits {
 			q := s.totalRewards[i] / float32(n)
 			v := q + c*float32(math.Sqrt(math.Log(float64(totalVisits))/float64(n)))
 			if v > vMax {
-				selected = i
+				action = i
 				vMax = v
 			} else if v == vMax && rand.Intn(2) == 0 {
 				// Break ties uniformly at random.
-				selected = i
+				action = i
 			}
 		}
 
-		return selected
+		return
 	}
 
 	p := stackalloc(len(s.visits))
 	s.fillAverageStrategyUnsafe(p, 1.0)
-	selected := sampling.SampleOne(p, rand.Float32())
-	s.visits[selected] = s.visits[selected] + virtualLoss
-	s.totalRewards[selected] -= virtualLoss
-	return selected
+	return sampling.SampleOne(p, rand.Float32())
+}
+
+func (s *mctsNode) addVirtualLossUnsafe(action int) {
+	s.visits[action] += virtualLoss
+	s.totalRewards[action] -= virtualLoss
 }
 
 func (s *mctsNode) averageStrategy(temperature float32) []float32 {
