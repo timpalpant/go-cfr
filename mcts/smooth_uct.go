@@ -9,6 +9,8 @@ import (
 	"github.com/timpalpant/go-cfr/sampling"
 )
 
+const virtualLoss = 1
+
 type mctsNode struct {
 	mx           sync.Mutex
 	prior        []float32
@@ -27,8 +29,8 @@ func newMCTSNode(prior []float32) *mctsNode {
 func (s *mctsNode) update(action int, reward float32) {
 	s.mx.Lock()
 	defer s.mx.Unlock()
-	s.visits[action] = s.visits[action] + 1
-	s.totalRewards[action] += reward
+	s.visits[action] = s.visits[action] - virtualLoss + 1
+	s.totalRewards[action] += virtualLoss - reward
 }
 
 // NOTE: This uses the selection formula from the AlphaGo Zero paper.
@@ -59,6 +61,8 @@ func (s *mctsNode) selectActionPUCT(c float32) int {
 		}
 	}
 
+	s.visits[selected] = s.visits[selected] + virtualLoss
+	s.totalRewards[selected] -= virtualLoss
 	return selected
 }
 
@@ -102,6 +106,8 @@ func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) int {
 	p := stackalloc(len(s.visits))
 	s.fillAverageStrategyUnsafe(p, 1.0)
 	selected := sampling.SampleOne(p, rand.Float32())
+	s.visits[selected] = s.visits[selected] + virtualLoss
+	s.totalRewards[selected] -= virtualLoss
 	return selected
 }
 
