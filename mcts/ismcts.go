@@ -88,10 +88,11 @@ func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode, temperature float32) [
 			node.Player(), s.player))
 	}
 
-	s.mx.Lock()
-	defer s.mx.Unlock()
 	u := node.InfoSet(node.Player()).Key()
+	s.mx.Lock()
 	treeNode, ok := s.tree[u]
+	s.mx.Unlock()
+
 	if ok {
 		return treeNode.averageStrategy(temperature)
 	}

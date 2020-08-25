@@ -1,6 +1,8 @@
 package mcts
 
 import (
+	"bytes"
+	"encoding/gob"
 	"math"
 	"math/rand"
 	"sync"
@@ -112,6 +114,20 @@ func (s *mctsNode) addVirtualLossUnsafe(action int) {
 	s.totalRewards[action] -= virtualLoss
 }
 
+func (s *mctsNode) totalVisits() int {
+	if s == nil {
+		return 0
+	}
+
+	s.mx.Lock()
+	defer s.mx.Unlock()
+	var totalVisits int
+	for _, v := range s.visits {
+		totalVisits += v
+	}
+	return totalVisits
+}
+
 func (s *mctsNode) averageStrategy(temperature float32) []float32 {
 	s.mx.Lock()
 	defer s.mx.Unlock()
@@ -175,16 +191,106 @@ func (s *SmoothUCT) Run(node cfr.GameTreeNode) float32 {
 	return s.simulate(node, node.Player(), [2]bool{false, false})
 }
 
-func (s *SmoothUCT) GetPolicy(node cfr.GameTreeNode, temperature float32) []float32 {
-	s.mx.Lock()
-	defer s.mx.Unlock()
+func (s *SmoothUCT) GetVisitCount(node cfr.GameTreeNode) int {
 	u := node.InfoSet(node.Player()).Key()
+	s.mx.Lock()
+	treeNode := s.tree[u]
+	s.mx.Unlock()
+
+	return treeNode.totalVisits()
+}
+
+func (s *SmoothUCT) GetPolicy(node cfr.GameTreeNode, temperature float32) []float32 {
+	u := node.InfoSet(node.Player()).Key()
+	s.mx.Lock()
 	treeNode, ok := s.tree[u]
+	s.mx.Unlock()
+
 	if ok {
 		return treeNode.averageStrategy(temperature)
 	}
 
 	return uniformDistribution(node.NumChildren())
+}
+
+func (s *SmoothUCT) GobDecode(buf []byte) error {
+	r := bytes.NewReader(buf)
+	dec := gob.NewDecoder(r)
+	if err := dec.Decode(&s.c); err != nil {
+		return err
+	}
+	if err := dec.Decode(&s.gamma); err != nil {
+		return err
+	}
+	if err := dec.Decode(&s.eta); err != nil {
+		return err
+	}
+	if err := dec.Decode(&s.d); err != nil {
+		return err
+	}
+
+	var numNodes int
+	if err := dec.Decode(&numNodes); err != nil {
+		return err
+	}
+	s.tree = make(map[string]*mctsNode)
+	for i := 0; i < numNodes; i++ {
+		var key string
+		if err := dec.Decode(&key); err != nil {
+			return err
+		}
+		var node mctsNode
+		if err := dec.Decode(&node.prior); err != nil {
+			return err
+		}
+		if err := dec.Decode(&node.visits); err != nil {
+			return err
+		}
+		if err := dec.Decode(&node.totalRewards); err != nil {
+			return err
+		}
+		s.tree[key] = &node
+	}
+
+	return nil
+}
+
+func (s *SmoothUCT) GobEncode() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(s.c); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(s.gamma); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(s.eta); err != nil {
+		return nil, err
+	}
+	if err := enc.Encode(s.d); err != nil {
+		return nil, err
+	}
+
+	s.mx.Lock()
+	defer s.mx.Unlock()
+	if err := enc.Encode(len(s.tree)); err != nil {
+		return nil, err
+	}
+	for key, node := range s.tree {
+		if err := enc.Encode(key); err != nil {
+			return nil, err
+		}
+		if err := enc.Encode(node.prior); err != nil {
+			return nil, err
+		}
+		if err := enc.Encode(node.visits); err != nil {
+			return nil, err
+		}
+		if err := enc.Encode(node.totalRewards); err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
 }
 
 func uniformDistribution(n int) []float32 {
