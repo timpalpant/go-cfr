@@ -38,10 +38,12 @@ func (s *mctsNode) update(action int, reward float32) {
 
 // NOTE: This uses the selection formula from the AlphaGo Zero paper.
 // The main difference seems to be the weighting of the visit counts.
-func (s *mctsNode) selectActionPUCT(c float32) (action int) {
+func (s *mctsNode) selectActionPUCT(rng *rand.Rand, c float32) (action int) {
 	s.mx.Lock()
-	defer s.mx.Unlock()
-	defer func() { s.addVirtualLossUnsafe(action) }()
+	defer func() {
+		s.addVirtualLossUnsafe(action)
+		s.mx.Unlock()
+	}()
 	totalVisits := 0
 	for _, v := range s.visits {
 		totalVisits += v
@@ -58,7 +60,7 @@ func (s *mctsNode) selectActionPUCT(c float32) (action int) {
 		if v > vMax {
 			action = i
 			vMax = v
-		} else if v == vMax && rand.Intn(2) == 0 {
+		} else if v == vMax && rng.Intn(2) == 0 {
 			// Break ties uniformly at random.
 			action = i
 		}
@@ -68,10 +70,12 @@ func (s *mctsNode) selectActionPUCT(c float32) (action int) {
 }
 
 // Follows the notation of Heinrich and Silver (2015).
-func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) (action int) {
+func (s *mctsNode) selectActionSmooth(rng *rand.Rand, c, gamma, eta, d float32) (action int) {
 	s.mx.Lock()
-	defer s.mx.Unlock()
-	defer func() { s.addVirtualLossUnsafe(action) }()
+	defer func() {
+		s.addVirtualLossUnsafe(action)
+		s.mx.Unlock()
+	}()
 	totalVisits := 0
 	for i, v := range s.visits {
 		if v == 0 {
@@ -86,7 +90,7 @@ func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) (action int) {
 		etaK = gamma
 	}
 
-	z := rand.Float32()
+	z := rng.Float32()
 	if z < etaK {
 		vMax := -float32(math.MaxFloat32)
 		for i, n := range s.visits {
@@ -95,7 +99,7 @@ func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) (action int) {
 			if v > vMax {
 				action = i
 				vMax = v
-			} else if v == vMax && rand.Intn(2) == 0 {
+			} else if v == vMax && rng.Intn(2) == 0 {
 				// Break ties uniformly at random.
 				action = i
 			}
@@ -106,7 +110,7 @@ func (s *mctsNode) selectActionSmooth(c, gamma, eta, d float32) (action int) {
 
 	p := stackalloc(len(s.visits))
 	s.fillAverageStrategyUnsafe(p, 1.0)
-	return sampling.SampleOne(p, rand.Float32())
+	return sampling.SampleOne(p, rng.Float32())
 }
 
 func (s *mctsNode) addVirtualLossUnsafe(action int) {
@@ -189,8 +193,8 @@ func NewSmoothUCT(c, gamma, eta, d, temperature float32) *SmoothUCT {
 	}
 }
 
-func (s *SmoothUCT) Run(node cfr.GameTreeNode) float32 {
-	return s.simulate(node, node.Player(), [2]bool{false, false})
+func (s *SmoothUCT) Run(rng *rand.Rand, node cfr.GameTreeNode) float32 {
+	return s.simulate(rng, node, node.Player(), [2]bool{false, false})
 }
 
 func (s *SmoothUCT) GetVisitCount(node cfr.GameTreeNode) int {
@@ -303,17 +307,17 @@ func uniformDistribution(n int) []float32 {
 	return result
 }
 
-func (s *SmoothUCT) simulate(node cfr.GameTreeNode, lastPlayer int, isOutOfTree [2]bool) float32 {
+func (s *SmoothUCT) simulate(rng *rand.Rand, node cfr.GameTreeNode, lastPlayer int, isOutOfTree [2]bool) float32 {
 	var ev float32
 	switch node.Type() {
 	case cfr.TerminalNodeType:
 		ev = float32(node.Utility(lastPlayer))
 	case cfr.ChanceNodeType:
 		child, _ := node.SampleChild()
-		ev = s.simulate(child, lastPlayer, isOutOfTree)
+		ev = s.simulate(rng, child, lastPlayer, isOutOfTree)
 	default:
 		sgn := getSign(lastPlayer, node.Player())
-		ev = sgn * s.handlePlayerNode(node, isOutOfTree)
+		ev = sgn * s.handlePlayerNode(rng, node, isOutOfTree)
 	}
 
 	node.Close()
@@ -328,10 +332,10 @@ func getSign(player1, player2 int) float32 {
 	return -1.0
 }
 
-func (s *SmoothUCT) handlePlayerNode(node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
+func (s *SmoothUCT) handlePlayerNode(rng *rand.Rand, node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
 	i := node.Player()
 	if isOutOfTree[i] {
-		return s.rollout(node, isOutOfTree)
+		return s.rollout(rng, node, isOutOfTree)
 	}
 
 	u := node.InfoSet(i).Key()
@@ -345,15 +349,15 @@ func (s *SmoothUCT) handlePlayerNode(node cfr.GameTreeNode, isOutOfTree [2]bool)
 	}
 	s.mx.Unlock()
 
-	action := treeNode.selectActionSmooth(s.c, s.gamma, s.eta, s.d)
+	action := treeNode.selectActionSmooth(rng, s.c, s.gamma, s.eta, s.d)
 	child := node.GetChild(action)
-	reward := s.simulate(child, i, isOutOfTree)
+	reward := s.simulate(rng, child, i, isOutOfTree)
 	treeNode.update(action, reward)
 	return reward
 }
 
-func (s *SmoothUCT) rollout(node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
-	action := rand.Intn(node.NumChildren())
+func (s *SmoothUCT) rollout(rng *rand.Rand, node cfr.GameTreeNode, isOutOfTree [2]bool) float32 {
+	action := rng.Intn(node.NumChildren())
 	child := node.GetChild(action)
-	return s.simulate(child, node.Player(), isOutOfTree)
+	return s.simulate(rng, child, node.Player(), isOutOfTree)
 }

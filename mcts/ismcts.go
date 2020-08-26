@@ -14,7 +14,7 @@ type Policy interface {
 }
 
 type Evaluator interface {
-	Evaluate(node cfr.GameTreeNode, opponent Policy) (policy []float32, value float32)
+	Evaluate(rng *rand.Rand, node cfr.GameTreeNode, opponent Policy) (policy []float32, value float32)
 }
 
 type RandomRollout struct {
@@ -25,7 +25,7 @@ func NewRandomRollout(nRollouts int) *RandomRollout {
 	return &RandomRollout{nRollouts}
 }
 
-func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode, opponent Policy) (policy []float32, value float32) {
+func (rr *RandomRollout) Evaluate(rng *rand.Rand, node cfr.GameTreeNode, opponent Policy) (policy []float32, value float32) {
 	player := node.Player()
 	var ev float64
 	for i := 0; i < rr.nRollouts; i++ {
@@ -34,7 +34,7 @@ func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode, opponent Policy) (polic
 			if current.Type() == cfr.ChanceNodeType {
 				current, _ = current.SampleChild()
 			} else if current.Player() == player {
-				action := rand.Intn(current.NumChildren())
+				action := rng.Intn(current.NumChildren())
 				current = current.GetChild(action)
 			} else {
 				p := opponent.GetPolicy(current)
@@ -43,7 +43,7 @@ func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode, opponent Policy) (polic
 						current.NumChildren(), len(p)))
 				}
 
-				action := sampling.SampleOne(p, rand.Float32())
+				action := sampling.SampleOne(p, rng.Float32())
 				current = current.GetChild(action)
 			}
 		}
@@ -80,8 +80,8 @@ func NewOneSidedISMCTS(player int, evaluator Evaluator, c, temperature float32) 
 	}
 }
 
-func (s *OneSidedISMCTS) Run(node cfr.GameTreeNode, opponent Policy) float32 {
-	return s.simulate(node, opponent, node.Player())
+func (s *OneSidedISMCTS) Run(rng *rand.Rand, node cfr.GameTreeNode, opponent Policy) float32 {
+	return s.simulate(rng, node, opponent, node.Player())
 }
 
 func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode) []float32 {
@@ -102,27 +102,27 @@ func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode) []float32 {
 	return uniformDistribution(node.NumChildren())
 }
 
-func (s *OneSidedISMCTS) simulate(node cfr.GameTreeNode, opponent Policy, lastPlayer int) float32 {
+func (s *OneSidedISMCTS) simulate(rng *rand.Rand, node cfr.GameTreeNode, opponent Policy, lastPlayer int) float32 {
 	var ev float32
 	switch node.Type() {
 	case cfr.TerminalNodeType:
 		ev = float32(node.Utility(lastPlayer))
 	case cfr.ChanceNodeType:
 		child, _ := node.SampleChild()
-		ev = s.simulate(child, opponent, lastPlayer)
+		ev = s.simulate(rng, child, opponent, lastPlayer)
 	default:
 		sgn := getSign(lastPlayer, node.Player())
-		ev = sgn * s.handlePlayerNode(node, opponent)
+		ev = sgn * s.handlePlayerNode(rng, node, opponent)
 	}
 
 	node.Close()
 	return ev
 }
 
-func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode, opponent Policy) float32 {
+func (s *OneSidedISMCTS) handlePlayerNode(rng *rand.Rand, node cfr.GameTreeNode, opponent Policy) float32 {
 	i := node.Player()
 	if i != s.player {
-		return s.handleOpponentNode(node, opponent)
+		return s.handleOpponentNode(rng, node, opponent)
 	}
 
 	u := node.InfoSet(i).Key()
@@ -133,7 +133,7 @@ func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode, opponent Policy
 		// If we race here and try to expand the same node twice, it's ok
 		// since the prior and values will be the same.
 		s.mx.Unlock()
-		p, v := s.evaluator.Evaluate(node, opponent)
+		p, v := s.evaluator.Evaluate(rng, node, opponent)
 		treeNode = newMCTSNode(p)
 		s.mx.Lock()
 		s.tree[u] = treeNode
@@ -142,16 +142,16 @@ func (s *OneSidedISMCTS) handlePlayerNode(node cfr.GameTreeNode, opponent Policy
 	}
 	s.mx.Unlock()
 
-	action := treeNode.selectActionPUCT(s.c)
+	action := treeNode.selectActionPUCT(rng, s.c)
 	child := node.GetChild(action)
-	reward := s.simulate(child, opponent, i)
+	reward := s.simulate(rng, child, opponent, i)
 	treeNode.update(action, reward)
 	return reward
 }
 
-func (s *OneSidedISMCTS) handleOpponentNode(node cfr.GameTreeNode, opponent Policy) float32 {
+func (s *OneSidedISMCTS) handleOpponentNode(rng *rand.Rand, node cfr.GameTreeNode, opponent Policy) float32 {
 	p := opponent.GetPolicy(node)
-	selected := sampling.SampleOne(p, rand.Float32())
+	selected := sampling.SampleOne(p, rng.Float32())
 	child := node.GetChild(selected)
-	return s.simulate(child, opponent, node.Player())
+	return s.simulate(rng, child, opponent, node.Player())
 }
