@@ -59,20 +59,22 @@ func (rr *RandomRollout) Evaluate(node cfr.GameTreeNode, opponent Policy) (polic
 // Implements one-sided IS-MCTS. The opponent will always use the provided policy
 // to select actions.
 type OneSidedISMCTS struct {
-	player    int
-	opponent  Policy
-	evaluator Evaluator
-	c         float32
+	player      int
+	opponent    Policy
+	evaluator   Evaluator
+	c           float32
+	temperature float32
 
 	mx   sync.Mutex
 	tree map[string]*mctsNode
 }
 
-func NewOneSidedISMCTS(player int, evaluator Evaluator, c float32) *OneSidedISMCTS {
+func NewOneSidedISMCTS(player int, evaluator Evaluator, c, temperature float32) *OneSidedISMCTS {
 	return &OneSidedISMCTS{
-		player:    player,
-		evaluator: evaluator,
-		c:         c,
+		player:      player,
+		evaluator:   evaluator,
+		c:           c,
+		temperature: temperature,
 
 		tree: make(map[string]*mctsNode),
 	}
@@ -82,7 +84,7 @@ func (s *OneSidedISMCTS) Run(node cfr.GameTreeNode, opponent Policy) float32 {
 	return s.simulate(node, opponent, node.Player())
 }
 
-func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode, temperature float32) []float32 {
+func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode) []float32 {
 	if node.Player() != s.player {
 		panic(fmt.Errorf("Trying to get policy for player %d from one-sided policy for player %d",
 			node.Player(), s.player))
@@ -94,7 +96,7 @@ func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode, temperature float32) [
 	s.mx.Unlock()
 
 	if ok {
-		return treeNode.averageStrategy(temperature)
+		return treeNode.averageStrategy(s.temperature)
 	}
 
 	return uniformDistribution(node.NumChildren())

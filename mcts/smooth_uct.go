@@ -167,21 +167,23 @@ func stackalloc(n int) []float32 {
 
 // Implements Smooth UCT.
 type SmoothUCT struct {
-	c     float32
-	gamma float32
-	eta   float32
-	d     float32
+	c           float32
+	gamma       float32
+	eta         float32
+	d           float32
+	temperature float32
 
 	mx   sync.Mutex
 	tree map[string]*mctsNode
 }
 
-func NewSmoothUCT(c, gamma, eta, d float32) *SmoothUCT {
+func NewSmoothUCT(c, gamma, eta, d, temperature float32) *SmoothUCT {
 	return &SmoothUCT{
-		c:     c,
-		gamma: gamma,
-		eta:   eta,
-		d:     d,
+		c:           c,
+		gamma:       gamma,
+		eta:         eta,
+		d:           d,
+		temperature: temperature,
 
 		tree: make(map[string]*mctsNode),
 	}
@@ -200,14 +202,14 @@ func (s *SmoothUCT) GetVisitCount(node cfr.GameTreeNode) int {
 	return treeNode.totalVisits()
 }
 
-func (s *SmoothUCT) GetPolicy(node cfr.GameTreeNode, temperature float32) []float32 {
+func (s *SmoothUCT) GetPolicy(node cfr.GameTreeNode) []float32 {
 	u := node.InfoSet(node.Player()).Key()
 	s.mx.Lock()
 	treeNode, ok := s.tree[u]
 	s.mx.Unlock()
 
 	if ok {
-		return treeNode.averageStrategy(temperature)
+		return treeNode.averageStrategy(s.temperature)
 	}
 
 	return uniformDistribution(node.NumChildren())
