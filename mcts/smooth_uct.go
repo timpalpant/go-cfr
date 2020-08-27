@@ -161,6 +161,7 @@ func (s *mctsNode) fillAverageStrategyUnsafe(p []float32, temperature float32) {
 const maxOnStack = 16
 
 func stackalloc(n int) []float32 {
+	v := make([]float32, 0, maxOnStack)
 	if n < maxOnStack {
 		return v[:n]
 	}

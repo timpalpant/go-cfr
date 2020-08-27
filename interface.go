@@ -49,6 +49,9 @@ type PlayerNode interface {
 	Player() int
 	// InfoSet returns the information set for this node for the given player.
 	InfoSet(player int) InfoSet
+	// InfoSetKey returns the equivalent of InfoSet(player).Key(),
+	// but can be used to avoid allocations incurred by the InfoSet interface.
+	InfoSetKey(player int) string
 	// Utility returns this node's utility for the given player.
 	// It must only be called for nodes with type == Terminal.
 	Utility(player int) float64

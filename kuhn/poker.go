@@ -198,6 +198,10 @@ func (k *PokerNode) InfoSet(player int) cfr.InfoSet {
 	}
 }
 
+func (k *PokerNode) InfoSetKey(player int) string {
+	return k.InfoSet(player).Key()
+}
+
 func (k *PokerNode) playerCard(player int) Card {
 	if player == player0 {
 		return k.p0Card
