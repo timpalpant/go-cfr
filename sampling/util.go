@@ -41,7 +41,7 @@ func SampleOne(pv []float32, x float32) int {
 	}
 
 	if cumProb < 1.0-tol { // Leave room for floating point error.
-		panic(fmt.Errorf("probability distribution does not sum to 1! x=%v, pv=%v", x, pv))
+		panic(fmt.Errorf("probability distribution does not sum to 1!"))
 	}
 
 	return len(pv) - 1
