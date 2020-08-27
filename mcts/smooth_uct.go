@@ -198,18 +198,18 @@ func (s *SmoothUCT) Run(rng *rand.Rand, node cfr.GameTreeNode) float32 {
 }
 
 func (s *SmoothUCT) GetVisitCount(node cfr.GameTreeNode) int {
-	u := node.InfoSet(node.Player()).Key()
+	u := node.InfoSetKey(node.Player())
 	s.mx.Lock()
-	treeNode := s.tree[u]
+	treeNode := s.tree[string(u)]
 	s.mx.Unlock()
 
 	return treeNode.totalVisits()
 }
 
 func (s *SmoothUCT) GetPolicy(node cfr.GameTreeNode) []float32 {
-	u := node.InfoSet(node.Player()).Key()
+	u := node.InfoSetKey(node.Player())
 	s.mx.Lock()
-	treeNode, ok := s.tree[u]
+	treeNode, ok := s.tree[string(u)]
 	s.mx.Unlock()
 
 	if ok {
@@ -338,13 +338,13 @@ func (s *SmoothUCT) handlePlayerNode(rng *rand.Rand, node cfr.GameTreeNode, isOu
 		return s.rollout(rng, node, isOutOfTree)
 	}
 
-	u := node.InfoSet(i).Key()
+	u := node.InfoSetKey(i)
 	s.mx.Lock()
-	treeNode, ok := s.tree[u]
+	treeNode, ok := s.tree[string(u)]
 	if !ok { // Expand tree.
 		prior := uniformDistribution(node.NumChildren())
 		treeNode = newMCTSNode(prior)
-		s.tree[u] = treeNode
+		s.tree[string(u)] = treeNode
 		isOutOfTree[i] = true
 	}
 	s.mx.Unlock()

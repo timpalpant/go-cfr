@@ -22,7 +22,7 @@ type InfoSet interface {
 	// It may be an arbitrary string of bytes and does not need to be
 	// human-readable. For example, it could be a simplified abstraction
 	// or hash of the full game history.
-	Key() string
+	Key() []byte
 	encoding.BinaryMarshaler
 	encoding.BinaryUnmarshaler
 }
@@ -51,7 +51,7 @@ type PlayerNode interface {
 	InfoSet(player int) InfoSet
 	// InfoSetKey returns the equivalent of InfoSet(player).Key(),
 	// but can be used to avoid allocations incurred by the InfoSet interface.
-	InfoSetKey(player int) string
+	InfoSetKey(player int) []byte
 	// Utility returns this node's utility for the given player.
 	// It must only be called for nodes with type == Terminal.
 	Utility(player int) float64

@@ -90,9 +90,9 @@ func (s *OneSidedISMCTS) GetPolicy(node cfr.GameTreeNode) []float32 {
 			node.Player(), s.player))
 	}
 
-	u := node.InfoSet(node.Player()).Key()
+	key := node.InfoSetKey(node.Player())
 	s.mx.Lock()
-	treeNode, ok := s.tree[u]
+	treeNode, ok := s.tree[string(key)]
 	s.mx.Unlock()
 
 	if ok {
@@ -125,9 +125,9 @@ func (s *OneSidedISMCTS) handlePlayerNode(rng *rand.Rand, node cfr.GameTreeNode,
 		return s.handleOpponentNode(rng, node, opponent)
 	}
 
-	u := node.InfoSet(i).Key()
+	key := node.InfoSetKey(i)
 	s.mx.Lock()
-	treeNode, ok := s.tree[u]
+	treeNode, ok := s.tree[string(key)]
 	if !ok { // Expand tree.
 		// Unlock so that other evaluations can be batched together.
 		// If we race here and try to expand the same node twice, it's ok
@@ -136,7 +136,7 @@ func (s *OneSidedISMCTS) handlePlayerNode(rng *rand.Rand, node cfr.GameTreeNode,
 		p, v := s.evaluator.Evaluate(rng, node, opponent)
 		treeNode = newMCTSNode(p)
 		s.mx.Lock()
-		s.tree[u] = treeNode
+		s.tree[string(key)] = treeNode
 		s.mx.Unlock()
 		return v
 	}

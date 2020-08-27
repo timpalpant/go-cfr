@@ -132,12 +132,12 @@ func (c *MCCFR) handleSampledPlayerNode(node GameTreeNode, sampleProb float32) f
 }
 
 func getOrSample(sampledActions map[string]int, node GameTreeNode, policy NodePolicy, rng *rand.Rand) int {
-	key := nodeKey(node)
-	selected, ok := sampledActions[key]
+	key := node.InfoSetKey(node.Player())
+	selected, ok := sampledActions[string(key)]
 	if !ok {
 		x := rng.Float32()
 		selected = sampleOne(policy.GetStrategy(), x)
-		sampledActions[key] = selected
+		sampledActions[string(key)] = selected
 	}
 
 	if selected >= node.NumChildren() {

@@ -58,18 +58,12 @@ func (pt *PolicyTable) Close() error {
 	return nil
 }
 
-func nodeKey(node GameTreeNode) string {
-	p := node.Player()
-	is := node.InfoSet(p)
-	return is.Key()
-}
-
 func (pt *PolicyTable) GetPolicy(node GameTreeNode) NodePolicy {
-	key := nodeKey(node)
-	np, ok := pt.policiesByKey[key]
+	key := node.InfoSetKey(node.Player())
+	np, ok := pt.policiesByKey[string(key)]
 	if !ok {
 		np = policy.New(node.NumChildren())
-		pt.policiesByKey[key] = np
+		pt.policiesByKey[string(key)] = np
 		numInfosets.Set(int64(len(pt.policiesByKey)))
 	} else if np.NumActions() != node.NumChildren() {
 		panic(fmt.Errorf("strategy has n_actions=%v but node has n_children=%v: %v",

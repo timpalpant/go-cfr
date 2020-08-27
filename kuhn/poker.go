@@ -171,12 +171,12 @@ type pokerInfoSet struct {
 	card    string
 }
 
-func (p pokerInfoSet) Key() string {
-	return p.history + "-" + p.card
+func (p pokerInfoSet) Key() []byte {
+	return []byte(p.history + "-" + p.card)
 }
 
 func (p pokerInfoSet) MarshalBinary() ([]byte, error) {
-	return []byte(p.history + "-" + p.card), nil
+	return p.Key(), nil
 }
 
 func (p *pokerInfoSet) UnmarshalBinary(buf []byte) error {
@@ -198,7 +198,7 @@ func (k *PokerNode) InfoSet(player int) cfr.InfoSet {
 	}
 }
 
-func (k *PokerNode) InfoSetKey(player int) string {
+func (k *PokerNode) InfoSetKey(player int) []byte {
 	return k.InfoSet(player).Key()
 }
 

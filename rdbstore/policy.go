@@ -111,7 +111,7 @@ func (pt *PolicyTable) Update() {
 	discountPos, discountNeg, discountSum := pt.discounts.GetDiscountFactors(pt.iter)
 
 	for key := range pt.mayNeedUpdate {
-		p := pt.getPolicyByKey(key)
+		p := pt.getPolicyByKey([]byte(key))
 		p.NextStrategy(discountPos, discountNeg, discountSum)
 
 		lPolicy := &ldbPolicy{
@@ -130,13 +130,13 @@ func (pt *PolicyTable) Update() {
 
 // GetPolicy implements cfr.StrategyProfile.
 func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
-	key := node.InfoSet(node.Player()).Key()
+	key := node.InfoSetKey(node.Player())
 	p := pt.getPolicyByKey(key)
 	if p == nil {
 		p = policy.New(node.NumChildren())
 	}
 
-	pt.mayNeedUpdate[key] = struct{}{}
+	pt.mayNeedUpdate[string(key)] = struct{}{}
 	return &ldbPolicy{
 		Policy: p,
 		db:     pt.db,
@@ -145,8 +145,8 @@ func (pt *PolicyTable) GetPolicy(node cfr.GameTreeNode) cfr.NodePolicy {
 	}
 }
 
-func (pt *PolicyTable) getPolicyByKey(key string) *policy.Policy {
-	result, err := pt.db.Get(pt.params.ReadOptions, []byte(key))
+func (pt *PolicyTable) getPolicyByKey(key []byte) *policy.Policy {
+	result, err := pt.db.Get(pt.params.ReadOptions, key)
 	if err != nil {
 		panic(err)
 	}

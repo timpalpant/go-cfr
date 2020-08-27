@@ -21,12 +21,12 @@ func VisitInfoSets(root cfr.GameTreeNode, visitor func(player int, infoSet cfr.I
 			player := node.Player()
 			infoSet := node.InfoSet(player)
 			key := infoSet.Key()
-			if _, ok := seen[key]; ok {
+			if _, ok := seen[string(key)]; ok {
 				return
 			}
 
 			visitor(player, infoSet)
-			seen[key] = struct{}{}
+			seen[string(key)] = struct{}{}
 		}
 	})
 }
