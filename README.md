@@ -34,22 +34,35 @@ import (
 
 func main() {
 	poker := kuhn.NewGame()
-	vanillaCFR := cfr.NewVanilla()
+	policy := cfr.NewPolicyTable(cfr.DiscountParams{})
+	vanillaCFR := cfr.New(policy)
 	nIter := 10000
-	expectedValue := 0.0
+	expectedValue := float32(0.0)
 	for i := 1; i <= nIter; i++ {
 		expectedValue += vanillaCFR.Run(poker)
 	}
 
-	expectedValue /= float64(nIter)
+	expectedValue /= float32(nIter)
 	fmt.Printf("Expected value is: %v\n", expectedValue)
 
-	tree.VisitInfoSets(poker, func(player int, infoSet string) {
-		strat := vanillaCFR.GetStrategy(player, infoSet)
-		if strat != nil {
-			fmt.Printf("[player %d] %6s: check=%.2f bet=%.2f\n",
-				player, infoSet, strat[0], strat[1])
+	seen := make(map[string]struct{})
+	tree.Visit(poker, func(node cfr.GameTreeNode) {
+		if node.Type() != cfr.PlayerNodeType {
+			return
 		}
+
+		key := node.InfoSet(node.Player()).Key()
+		if _, ok := seen[string(key)]; ok {
+			return
+		}
+
+		actionProbs := policy.GetPolicy(node).GetAverageStrategy()
+		if actionProbs != nil {
+			fmt.Printf("[player %d] %6s: check=%.2f bet=%.2f\n",
+				node.Player(), key, actionProbs[0], actionProbs[1])
+		}
+
+		seen[string(key)] = struct{}{}
 	})
 }
 ```
